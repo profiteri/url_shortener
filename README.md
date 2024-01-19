@@ -61,3 +61,15 @@ az container create --memory 4 ...
 * How does your system scale?
    * Measure the latency with increased data inserted, e.g., in 10% increments of inserted short URLs
    * Measure the system performance with more nodes
+
+##url_shortner testing
+1. Ensure Dependencies are Installed:
+   Make sure you have Flask installed in your Python environment. You can install it using the following command if you haven't already: pip install Flask
+2. Once Flask is installed, save the code in a file (in our application, url_shortner.py). Open a terminal, navigate to the directory containing the file, and run the application: python url_shortner.py
+   3.Use a tool like cURL, Postman, or a web browser to test the /shorten endpoint by sending a POST request with a JSON body containing the full_url parameter. (It doesn't work directly on the browser, becuase of the POST request)
+   For example, using cURL: curl -X POST -H "Content-Type: application/json" -d '{"full_url": "http://example.com/long-url"}' http://127.0.0.1:5000/shorten
+3. Testing the API:
+   In a new terminal window, use cURL or another HTTP request tool to send requests and test your API. For example, you can use the provided cURL command to test the /shorten route: curl -X POST -H "Content-Type: application/json" -d '{"full_url": "http://example.com/long-url"}' http://127.0.0.1:5000/shorten
+   Next, you can test the /expand route:
+   curl -X POST -H "Content-Type: application/json" -d '{"short_url": "a0a0f57d"}' http://127.0.0.1:5000/expand
+
