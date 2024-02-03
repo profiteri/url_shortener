@@ -3,6 +3,13 @@
 #include <string>
 #include <functional>
 #include <fstream>
+#include <set>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <cstring>
+#include <arpa/inet.h>
+#include <unordered_set>
+#include <unistd.h>
 
 
 enum class NodeType {
@@ -70,37 +77,141 @@ std::string getLongURL(const std::string& shortURL) {
 }
 
 
+// Always 127.0.0.1 when executed in docker locally
+std::string GetLocalIpAddress() {
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock == -1) {
+        std::cerr << "Error creating socket for local IP address retrieval." << std::endl;
+        return "";
+    }
+
+    sockaddr_in loopback;
+    memset(&loopback, 0, sizeof(loopback));
+    loopback.sin_family = AF_INET;
+    loopback.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    loopback.sin_port = htons(9);  // Discard port
+
+    if (connect(sock, reinterpret_cast<struct sockaddr*>(&loopback), sizeof(loopback)) == -1) {
+        close(sock);
+        std::cerr << "Error connecting to local address." << std::endl;
+        return "";
+    }
+
+    sockaddr_in localAddr;
+    socklen_t addrLen = sizeof(localAddr);
+    if (getsockname(sock, reinterpret_cast<struct sockaddr*>(&localAddr), &addrLen) == -1) {
+        close(sock);
+        std::cerr << "Error getting local address." << std::endl;
+        return "";
+    }
+
+    close(sock);
+
+    char ipAddress[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &localAddr.sin_addr, ipAddress, sizeof(ipAddress));
+    return ipAddress;
+}
+
+
 int main(int argc, char* argv[]) {
     if (argc) {
         std::cout << "Started " << argv[0] << std::endl;
     }
 
-    std::ifstream shortToLongFile("/space/shortToLong.txt");
-    std::ifstream longToShortFile("/space/longToShort.txt");
+    std::string localIpAddress = GetLocalIpAddress();
 
-    if (shortToLongFile.is_open() && longToShortFile.is_open()) {
-        std::string key;
-        std::string value;
+    std::cout << "Local address: " << localIpAddress << std::endl;
 
-        while (shortToLongFile >> key >> value) {
-            shortToLong[key] = value;
-        }
-
-        while (longToShortFile >> key >> value) {
-            longToShort[key] = value;
-        }
-    } else if (shortToLongFile.is_open() || longToShortFile.is_open()) {
-        std::cerr << "Only one hashtable file is found" << std::endl;
+    if (localIpAddress.empty()) {
+        std::cerr << "Failed to retrieve local IP address." << std::endl;
         return 1;
     }
 
-    auto short1 = generateShortURL("longURLtest1");
+    const int PORT = 4242;
 
-    auto short2 = generateShortURL("longURLtest2");
+    // Create a socket for broadcasting
+    int broadcastSocket = socket(AF_INET, SOCK_DGRAM, 0);
 
-    getLongURL(short1);
-    getLongURL(short2);
-    getLongURL("unknownShortURL");
+    // Enable broadcast option
+    int broadcastEnable = 1;
+    setsockopt(broadcastSocket, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable));
+
+    // Set up the broadcast address
+    sockaddr_in broadcastAddress;
+    broadcastAddress.sin_family = AF_INET;
+    broadcastAddress.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+    broadcastAddress.sin_port = htons(PORT);
+
+    // // Send a broadcast message
+    // const char* broadcastMessage = "Node Discovery";
+    // sendto(broadcastSocket, broadcastMessage, strlen(broadcastMessage), 0, (struct sockaddr*)&broadcastAddress, sizeof(broadcastAddress));
+
+    // // Close the broadcast socket
+    // close(broadcastSocket);
+
+    // Create a socket for listening
+    int listenSocket = socket(AF_INET, SOCK_DGRAM, 0);
+
+    // Set up the listening address
+    sockaddr_in listenAddress;
+    listenAddress.sin_family = AF_INET;
+    listenAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+    listenAddress.sin_port = htons(PORT);
+
+    // Bind the socket to the listening address
+    bind(listenSocket, (struct sockaddr*)&listenAddress, sizeof(listenAddress));
+
+    // Receive and print incoming messages
+    char buffer[256];
+    sockaddr_in senderAddress;
+    socklen_t senderAddressSize = sizeof(senderAddress);
+
+    const int BROADCAST_DURATION_SECONDS = 10;
+
+    std::unordered_set<std::string> nodeAddresses;
+    
+    while(true) {
+        const char* broadcastMessage = "Node Discovery";
+        sendto(broadcastSocket, broadcastMessage, strlen(broadcastMessage), 0, (struct sockaddr*)&broadcastAddress, sizeof(broadcastAddress));
+        recvfrom(listenSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&senderAddress, &senderAddressSize);
+        std::string nodeAddress = inet_ntoa(senderAddress.sin_addr);
+        if (nodeAddress != localIpAddress && nodeAddresses.find(nodeAddress) == nodeAddresses.end()) {
+            nodeAddresses.insert(nodeAddress);
+            std::cout << "Received from: " << nodeAddress << " Message: " << buffer << std::endl;
+        }
+        sleep(1);
+    }
+
+    // Close the listening socket
+    close(listenSocket);
+    close(broadcastSocket);
+
+    // std::ifstream shortToLongFile("/space/shortToLong.txt");
+    // std::ifstream longToShortFile("/space/longToShort.txt");
+
+    // if (shortToLongFile.is_open() && longToShortFile.is_open()) {
+    //     std::string key;
+    //     std::string value;
+
+    //     while (shortToLongFile >> key >> value) {
+    //         shortToLong[key] = value;
+    //     }
+
+    //     while (longToShortFile >> key >> value) {
+    //         longToShort[key] = value;
+    //     }
+    // } else if (shortToLongFile.is_open() || longToShortFile.is_open()) {
+    //     std::cerr << "Only one hashtable file is found" << std::endl;
+    //     return 1;
+    // }
+
+    // auto short1 = generateShortURL("longURLtest1");
+
+    // auto short2 = generateShortURL("longURLtest2");
+
+    // getLongURL(short1);
+    // getLongURL(short2);
+    // getLongURL("unknownShortURL");
 
     return 0;
 }

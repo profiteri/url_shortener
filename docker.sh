@@ -1,6 +1,12 @@
 #!/bin/bash
 
-docker rm node
+for ((i = 0; i < 2; i++))
+do
+    docker stop node_$i
+    docker rm node_$i
+done
+
+docker network create cbdp_net
 
 if [ "$1" == "build" ]; then
 
@@ -12,5 +18,7 @@ if [ "$1" == "build" ]; then
 
 fi
 
-docker run --mount source=cbdp-volume,target=/space --name=node cbdp_node
-
+for ((i = 0; i < 2; i++))
+do
+    docker run -d --network=cbdp_net --mount source=cbdp-volume,target=/space --name=node_$i cbdp_node
+done
