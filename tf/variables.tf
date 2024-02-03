@@ -22,6 +22,12 @@ variable "username" {
   description = "The username for the local account that will be created on the new VM."
 }
 
+variable "password" {
+  type        = string
+  default     = "BelarusLives1"
+  description = "The username for the local account that will be created on the new VM."
+}
+
 variable "virtual_network_name" {
   type        = string
   default     = "test-vnet"

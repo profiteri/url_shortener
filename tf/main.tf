@@ -31,6 +31,19 @@ resource "azurerm_network_security_group" "my_nsg" {
     source_address_prefix      = "*"
     destination_address_prefix = "10.0.1.0/24"
   }
+
+  security_rule {
+    name                       = "ssh"
+    priority                   = 1000
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "10.0.1.0/24"
+  }
+
 }
 
 # Associate the Network Security Group to the subnet
@@ -93,11 +106,9 @@ resource "azurerm_linux_virtual_machine" "my_vm" {
     version   = "latest"
   }
 
-  admin_username = var.username
-  admin_ssh_key {
-    username   = var.username
-    public_key = jsondecode(azapi_resource_action.ssh_public_key_gen.output).publicKey
-  }
+  admin_username                  = var.username
+  admin_password                  = var.password
+  disable_password_authentication = false
 
 }
 
@@ -156,21 +167,38 @@ resource "azurerm_lb_rule" "my_lb_rule" {
   backend_address_pool_ids       = [azurerm_lb_backend_address_pool.my_lb_pool.id]
 }
 
-resource "azurerm_lb_nat_rule" "my_nat_rule" {
+resource "azurerm_lb_nat_rule" "my_nat_rule_vm1" {
   resource_group_name            = var.resource_group_name
   loadbalancer_id                = azurerm_lb.my_lb.id
-  name                           = "test-ssh"
+  name                           = "test-ssh-vm1"
   protocol                       = "Tcp"
-  frontend_port                  = 22
+  frontend_port                  = 221
   backend_port                   = 22
-  frontend_ip_configuration_name = azurerm_lb.my_lb.frontend_ip_configuration[0].name
+  frontend_ip_configuration_name = var.public_ip_name
+}
+
+resource "azurerm_lb_nat_rule" "my_nat_rule_vm2" {
+  resource_group_name            = var.resource_group_name
+  loadbalancer_id                = azurerm_lb.my_lb.id
+  name                           = "test-ssh-vm2"
+  protocol                       = "Tcp"
+  frontend_port                  = 222
+  backend_port                   = 22
+  frontend_ip_configuration_name = var.public_ip_name
 }
 
 # Associate LB NAT Rule and VM Network Interface
-resource "azurerm_network_interface_nat_rule_association" "my_web_nic_nat_rule_associate" {
+resource "azurerm_network_interface_nat_rule_association" "my_web_nic_nat_rule_associate_vm1" {
   network_interface_id  = azurerm_network_interface.my_nic[0].id
-  ip_configuration_name = azurerm_network_interface.my_nic[0].ip_configuration[0].name 
-  nat_rule_id           = azurerm_lb_nat_rule.my_nat_rule.id
+  ip_configuration_name = azurerm_network_interface.my_nic[0].ip_configuration[0].name
+  nat_rule_id           = azurerm_lb_nat_rule.my_nat_rule_vm1.id
+}
+
+# Associate LB NAT Rule and VM Network Interface
+resource "azurerm_network_interface_nat_rule_association" "my_web_nic_nat_rule_associate_vm2" {
+  network_interface_id  = azurerm_network_interface.my_nic[1].id
+  ip_configuration_name = azurerm_network_interface.my_nic[1].ip_configuration[0].name
+  nat_rule_id           = azurerm_lb_nat_rule.my_nat_rule_vm2.id
 }
 
 resource "azurerm_lb_outbound_rule" "my_lboutbound_rule" {
