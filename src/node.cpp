@@ -77,39 +77,56 @@ std::string getLongURL(const std::string& shortURL) {
 }
 
 
-// Always 127.0.0.1 when executed in docker locally
 std::string GetLocalIpAddress() {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock == -1) {
-        std::cerr << "Error creating socket for local IP address retrieval." << std::endl;
-        return "";
-    }
 
-    sockaddr_in loopback;
-    memset(&loopback, 0, sizeof(loopback));
-    loopback.sin_family = AF_INET;
-    loopback.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    loopback.sin_port = htons(9);  // Discard port
+    // Use a dummy IP address and port for the destination
+    sockaddr_in dummyDest;
+    memset(&dummyDest, 0, sizeof(dummyDest));
+    dummyDest.sin_family = AF_INET;
+    dummyDest.sin_addr.s_addr = inet_addr("8.8.8.8");
+    dummyDest.sin_port = htons(5353);  // DNS port
 
-    if (connect(sock, reinterpret_cast<struct sockaddr*>(&loopback), sizeof(loopback)) == -1) {
-        close(sock);
-        std::cerr << "Error connecting to local address." << std::endl;
-        return "";
-    }
+    // Connect the socket to the dummy destination to get the local address
+    connect(sock, reinterpret_cast<struct sockaddr*>(&dummyDest), sizeof(dummyDest));
 
+    // Get the local address assigned to the socket
     sockaddr_in localAddr;
     socklen_t addrLen = sizeof(localAddr);
-    if (getsockname(sock, reinterpret_cast<struct sockaddr*>(&localAddr), &addrLen) == -1) {
-        close(sock);
-        std::cerr << "Error getting local address." << std::endl;
-        return "";
-    }
+    getsockname(sock, reinterpret_cast<struct sockaddr*>(&localAddr), &addrLen);
 
+    // Close the socket
     close(sock);
 
     char ipAddress[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &localAddr.sin_addr, ipAddress, sizeof(ipAddress));
+    inet_ntop(localAddr.sin_family, &(localAddr.sin_addr), ipAddress, INET_ADDRSTRLEN);
+
     return ipAddress;
+
+    // char hostName[255];
+    // if (gethostname(hostName, sizeof(hostName)) != 0) {
+    //     std::cerr << "Error getting hostname." << std::endl;
+    //     return "";
+    // }
+
+    // struct addrinfo* result = nullptr;
+    // struct addrinfo hints;
+
+    // memset(&hints, 0, sizeof(hints));
+    // hints.ai_family = AF_INET;
+    // hints.ai_socktype = SOCK_STREAM;
+
+    // if (getaddrinfo(hostName, nullptr, &hints, &result) != 0) {
+    //     std::cerr << "Error getting address info." << std::endl;
+    //     return "";
+    // }
+
+    // char ipAddress[INET_ADDRSTRLEN];
+    // inet_ntop(result->ai_family, &((struct sockaddr_in*)result->ai_addr)->sin_addr, ipAddress, sizeof(ipAddress));
+
+    // freeaddrinfo(result);
+
+    // return ipAddress;
 }
 
 
@@ -165,8 +182,6 @@ int main(int argc, char* argv[]) {
     char buffer[256];
     sockaddr_in senderAddress;
     socklen_t senderAddressSize = sizeof(senderAddress);
-
-    const int BROADCAST_DURATION_SECONDS = 10;
 
     std::unordered_set<std::string> nodeAddresses;
     
