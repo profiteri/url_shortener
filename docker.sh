@@ -9,4 +9,4 @@ if [ "$1" == "build" ]; then
 
 fi
 
-docker run --rm -it -p 80:80 --mount source=cbdp-volume,target=/space --name=node cbdp_node bash
+docker run --rm -it -p 80:80 -p 4242:4242 --mount source=cbdp-volume,target=/space --name=node cbdp_node bash
