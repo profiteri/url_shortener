@@ -19,10 +19,12 @@ public:
     std::string recv_msg(const std::string& from);
     //std::string recv_msg_blocking(const std::string& from);
 
-    enum class NodeType {
+    enum NodeType : unsigned char {
         Follower = 0,
         Leader = 1
     };
+
+    std::unordered_map<std::string, int> nodes;
 
 private:
 
@@ -31,10 +33,9 @@ private:
     sockaddr_in listenAddress;
     int broadcastSocket;
     int broadcastListenSocket;
-    
-    std::unordered_map<std::string, int> nodes;
+
     std::unordered_set<std::string> pendingNodeAddresses = {"10.0.1.4", "10.0.1.5"};//, "10.0.1.5", "10.0.1.6", "10.0.1.7", "10.0.1.8"};
-    
+
     std::string getLocalIpAddress();
     void broadcast();
     int listeningSocket;
