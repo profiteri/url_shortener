@@ -9,6 +9,7 @@ enum RPCType : unsigned char {
     requestVote = 2
 };
 
+
 enum Mode : unsigned char {
     shorten = 0,
     extend = 1
@@ -21,19 +22,13 @@ struct Command {
     std::string value;
 };
 
+
 struct LogEntry {
     size_t term;
     size_t index;
     struct Command command;
 };
 
-
-struct RequestVote {
-    int candidateId;
-    size_t term;
-    size_t lastLogIndex;
-    size_t lastLogTerm;
-};
 
 struct AppendEntries {
 
@@ -46,6 +41,23 @@ public:
     size_t commitIndex;
     // have to use vector since it's variable length
     std::vector<struct LogEntry> entries;
+
+    bool sendRPC(int socket);
+
+    void serialize(char*& buffer) const;
+
+    void deserialize(const char*& buffer);
+};
+
+
+struct RequestVote {
+
+public:
+
+    int candidateId;
+    size_t term;
+    size_t lastLogIndex;
+    size_t lastLogTerm;
 
     bool sendRPC(int socket);
 

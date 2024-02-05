@@ -155,3 +155,62 @@ bool AppendEntries::sendRPC(int socket) {
     ssize_t sentBytes = send(socket, buffer, dataSize, 0);
     return sentBytes == static_cast<ssize_t>(dataSize);
 }
+
+void RequestVote::serialize(char*& buffer) const {
+    // Serialize each member individually
+    int candidateIdNet = htonl(candidateId);
+    memcpy(buffer, &candidateIdNet, sizeof(int));
+    buffer += sizeof(int);
+
+    size_t termNet = htonl(term);
+    memcpy(buffer, &termNet, sizeof(size_t));
+    buffer += sizeof(size_t);
+
+    size_t lastLogIndexNet = htonl(lastLogIndex);
+    memcpy(buffer, &lastLogIndexNet, sizeof(size_t));
+    buffer += sizeof(size_t);
+
+    size_t lastLogTermNet = htonl(lastLogTerm);
+    memcpy(buffer, &lastLogTermNet, sizeof(size_t));
+    buffer += sizeof(size_t);
+
+}
+
+
+void RequestVote::deserialize(const char*& buffer) {
+    // Deserialize each member individually
+    int candidateIdNet;
+    memcpy(&candidateIdNet, buffer, sizeof(int));
+    candidateId = ntohl(candidateIdNet);
+    buffer += sizeof(int);
+
+    size_t termNet;
+    memcpy(&termNet, buffer, sizeof(size_t));
+    term = ntohl(termNet);
+    buffer += sizeof(size_t);
+
+    size_t lastLogIndexNet;
+    memcpy(&lastLogIndexNet, buffer, sizeof(size_t));
+    lastLogIndex = ntohl(lastLogIndexNet);
+    buffer += sizeof(size_t);
+
+    size_t lastLogTermNet;
+    memcpy(&lastLogTermNet, buffer, sizeof(size_t));
+    lastLogTerm = ntohl(lastLogTermNet);
+    buffer += sizeof(size_t);
+}
+
+bool RequestVote::sendRPC(int socket) {
+    // Calculate the size needed for serialization
+    size_t dataSize = sizeof(int) + sizeof(size_t) + sizeof(size_t) + sizeof(size_t);
+
+    // Create a buffer to hold the serialized data
+    char buffer[dataSize];
+    // Serialize the data into the buffer
+    buffer[0] = RPCType::requestVote;
+    char* bufferPtr = &buffer[1];
+    serialize(bufferPtr);
+    // Send the buffer over the socket
+    ssize_t sentBytes = send(socket, buffer, dataSize, 0);
+    return sentBytes == static_cast<ssize_t>(dataSize);
+}

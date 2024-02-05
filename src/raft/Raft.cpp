@@ -88,10 +88,11 @@ void Raft::listenToRPCs() {
         char type = buffer[0];
         const char* bufferPtr = &buffer[1];
         if (type == RPCType::appendEntries) {
-            AppendEntries receivedData;
-            receivedData.deserialize(bufferPtr);
+            AppendEntries appendEntries;
+            appendEntries.deserialize(bufferPtr);
         } else if (type == RPCType::requestVote) {
-            // same for requestVote
+            RequestVote requestVote;
+            requestVote.deserialize(bufferPtr);
         }
     }
 }
