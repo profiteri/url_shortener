@@ -21,4 +21,5 @@ target_link_libraries(node ${LIB_TO_INCLUDE})
 add_subdirectory(src/http_server)
 add_subdirectory(src/node)
 add_subdirectory(src/raft)
+add_subdirectory(src/storage)
 
