@@ -1,11 +1,15 @@
 #include <iostream>
-#include "Node.h"
+#include <stdexcept>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
 #include <netdb.h>
 #include <cstring>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <net/if.h>
+
+#include "Node.h"
 
 int convertIPToInteger(const std::string& ipAddress) {
     std::stringstream ss;
@@ -20,7 +24,7 @@ int convertIPToInteger(const std::string& ipAddress) {
 }
 
 
-std::string Node::GetLocalIpAddress() {
+std::string Node::getLocalIpAddress() {
     char hostName[255];
     if (gethostname(hostName, sizeof(hostName)) != 0) {
         std::cerr << "Error getting hostname." << std::endl;
@@ -41,24 +45,6 @@ std::string Node::GetLocalIpAddress() {
     return ipAddress;
 }
 
-void Node::broadcast() {
-    char buffer[256];
-    sockaddr_in senderAddress;
-    socklen_t senderAddressSize = sizeof(senderAddress);
-    const char* broadcastMessage = "Node Discovery";
-    sendto(broadcastSocket, broadcastMessage, strlen(broadcastMessage), 0, (struct sockaddr*)&broadcastAddress, sizeof(broadcastAddress));
-    recvfrom(broadcastListenSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&senderAddress, &senderAddressSize);
-    std::string nodeAddress = inet_ntoa(senderAddress.sin_addr);
-    if (nodeAddress != localIpAddress && nodes.find(nodeAddress) == nodes.end()) {
-        int localIpAddressInt = convertIPToInteger(localIpAddress);
-        int nodeAddressInt = convertIPToInteger(nodeAddress);
-        if (nodeAddressInt > localIpAddressInt && pendingNodeAddresses.find(nodeAddress) == pendingNodeAddresses.end()) {
-            pendingNodeAddresses.insert(nodeAddress);
-            std::cout << "Received from: " << nodeAddress << " Message: " << buffer << std::endl;
-        }
-    }
-}
-
 void Node::acceptConnection() {
     sockaddr_in senderAddress;
     socklen_t addrlen = sizeof(senderAddress);
@@ -68,7 +54,7 @@ void Node::acceptConnection() {
         if (nodes.find(nodeAddress) == nodes.end()) {
             std::cout << " -  accepted new node: " << nodeAddress << std::endl;
             int flags = fcntl(nodeSocket, F_GETFL, 0);
-            fcntl(nodeSocket, F_SETFL, flags | O_NONBLOCK);
+            fcntl(nodeSocket, F_SETFL, flags/* | O_NONBLOCK*/);
             nodes.emplace(nodeAddress, nodeSocket);
         } else {
             close(nodeSocket);
@@ -132,8 +118,6 @@ int Node::connectToNode(const std::string& host, const std::string& port) {
         return -1;
    }
 
-   std::cout << "Connected to " << host << std::endl;
-
    nodes.emplace(host, nodeSocket);
 
    freeaddrinfo(res);   
@@ -141,59 +125,91 @@ int Node::connectToNode(const std::string& host, const std::string& port) {
    return 0;
 }
 
+void Node::send_msg(const std::string& data, const std::string& to) {
+
+    std::cout << "Try send to: " << to << '\n';
+    if (send(nodes[to], data.c_str(), strlen(data.c_str()), 0) > 0) {
+        std::cout << "Sent successful\n";
+    } else {
+        std::cout << "Error sending msg\n";
+    }
+
+}
+
+std::string Node::recv_msg(const std::string& from) {
+
+    std::vector<char> buffer(4096);
+    std::string data;   
+    int bytesReceived = recv(nodes[from], &buffer[0], buffer.size(), 0);
+    
+    if (bytesReceived == -1) { 
+        std::cout << "Didn't receive shit :(\n";
+        return "";
+    } else {
+        data.append(buffer.cbegin(), buffer.cend());
+        std::cout << "Received msg: " << data << '\n';
+        return data;
+    }
+
+}
+
 Node::Node() {
-    localIpAddress = GetLocalIpAddress();
+
+    localIpAddress = getLocalIpAddress();
     std::cout << "Local address: " << localIpAddress << std::endl;
     if (localIpAddress.empty()) {
         std::cerr << "Failed to retrieve local IP address." << std::endl;
         // throw exception here
         return;
     }
-    const int BROADCAST_PORT = 4242;
 
-    // Create a socket for broadcasting
-    broadcastSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    //remove higher adresses
+    int localIpAddressInt = convertIPToInteger(localIpAddress);
+    for (auto it = pendingNodeAddresses.begin(); it != pendingNodeAddresses.end();) {
+        
+        int nodeIpAddressInt = convertIPToInteger(*it);
+        if (nodeIpAddressInt >= localIpAddressInt) it = pendingNodeAddresses.erase(it);
+        else ++it;
 
-    // Enable broadcast option
-    int broadcastEnable = 1;
-    setsockopt(broadcastSocket, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable));
-
-    // Set up the broadcast address
-    broadcastAddress.sin_family = AF_INET;
-    broadcastAddress.sin_addr.s_addr = htonl(INADDR_BROADCAST);
-    broadcastAddress.sin_port = htons(BROADCAST_PORT);
-
-    // Create a socket for listening
-    broadcastListenSocket = socket(AF_INET, SOCK_DGRAM, 0);
-
-    // Set up the listening address
-    listenAddress.sin_family = AF_INET;
-    listenAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-    listenAddress.sin_port = htons(BROADCAST_PORT);
-
-    // Bind the socket to the listening address
-    bind(broadcastListenSocket, (struct sockaddr*)&listenAddress, sizeof(listenAddress));
-    // Non-blocking
-    int flags = fcntl(broadcastListenSocket, F_GETFL, 0);
-    fcntl(broadcastListenSocket, F_SETFL, flags | O_NONBLOCK);
-
+    }
+    
     // use 4343 for commmunication between nodes
     setupListeningSocket("4343");
+
 }
 
 void Node::start() {
-    std::cout << "Starting the node...\n";
-    while (true) {
-        broadcast();
+
+    std::cout << "Starting discovery phase\n";
+    for (int i = 0; i < 10; ++i) {
+        
+        std::cout << "Loop No. : " << i << "\n";
         sleep(1);
+        
+        std::cout << "Try accept connection...\n";
         acceptConnection();
+
         if (!pendingNodeAddresses.empty()) {
             const std::string& node_address = *pendingNodeAddresses.begin();
-            // use 4343 for commmunication between nodes
+            std::cout << "Try connect to: " << node_address << "\n";
             if (connectToNode(node_address, "4343") == 0) {
                 pendingNodeAddresses.erase(node_address);
             }
         }
     }
+
+    std::cout << "Discovery done\n";
+    for (const auto& el : nodes) {
+        std::cout << el.first << ": " << el.second << "\n";
+        send_msg("hello from node " + localIpAddress, el.first);
+
+        std::string msg;
+        do {
+            msg = recv_msg(el.first);
+        } while (msg == "");        
+    }
+
+    std::cout << "Starting http server\n";
     s.run();
+    
 }
