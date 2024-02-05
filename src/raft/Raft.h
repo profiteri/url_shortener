@@ -24,7 +24,6 @@ private:
     struct State state;
     void loadPersistentState();
     void dumpStateToFile(const std::vector<struct LogEntry>& newEntries);
-    bool sendAppendEntries(int socket, const AppendEntries& data);
     int receiveRPC(int socket, char* buffer);
     void listenToRPCs();
 

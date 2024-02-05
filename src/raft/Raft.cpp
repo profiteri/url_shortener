@@ -96,28 +96,6 @@ void Raft::listenToRPCs() {
     }
 }
 
-bool Raft::sendAppendEntries(int socket, const AppendEntries& data) {
-    // Calculate the size needed for serialization
-    size_t dataSize = sizeof(size_t) + sizeof(int) + sizeof(size_t) + sizeof(size_t) +
-                      sizeof(size_t) + sizeof(size_t);  // Base size for AppendEntries
-    // Add size for each LogEntry
-    for (const auto& logEntry : data.entries) {
-        dataSize += sizeof(size_t) + sizeof(size_t) + sizeof(Mode) +
-                    sizeof(size_t) + sizeof(size_t) +
-                    logEntry.command.key.size() + 1 +
-                    logEntry.command.value.size() + 1;
-    }
-    // Create a buffer to hold the serialized data
-    char buffer[dataSize];
-    // Serialize the data into the buffer
-    buffer[0] = RPCType::appendEntries;
-    char* bufferPtr = &buffer[1];
-    data.serialize(bufferPtr);
-    // Send the buffer over the socket
-    ssize_t sentBytes = send(socket, buffer, dataSize, 0);
-    return sentBytes == static_cast<ssize_t>(dataSize);
-}
-
 
 Raft::Raft() {
     loadPersistentState();

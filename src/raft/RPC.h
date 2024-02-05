@@ -47,6 +47,8 @@ public:
     // have to use vector since it's variable length
     std::vector<struct LogEntry> entries;
 
+    bool sendRPC(int socket);
+
     void serialize(char*& buffer) const;
 
     void deserialize(const char*& buffer);
