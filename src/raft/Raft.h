@@ -52,4 +52,6 @@ public:
 private:
 
     struct State state;
+    void loadPersistentState();
+    void dumpStateToFile(const std::vector<struct LogEntry>& newEntries);
 };

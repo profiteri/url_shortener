@@ -1,31 +1,69 @@
 #include "Raft.h"
 #include <fstream>
 
-
-Raft::Raft() {
+void Raft::loadPersistentState() {
+    size_t logSize;
     std::ifstream stateFile("/space/state.txt");
     if (stateFile.is_open()) {
         stateFile >> state.currentTerm;
         stateFile >> state.votedFor;
 
-        size_t logSize;
         stateFile >> logSize;
-
-        for (size_t i = 0; i < logSize; ++i) {
-            LogEntry entry;
-            stateFile >> entry.term;
-            stateFile >> entry.index;
-
-            int mode;
-            stateFile >> mode;
-            entry.command.mode = static_cast<Mode>(mode);
-
-            stateFile >> entry.command.key;
-            stateFile >> entry.command.value;
-
-            state.log.push_back(entry);
-        }
 
         stateFile.close();
     }
+    std::ifstream logFile("/space/log.txt");
+    if (logFile.is_open()) {
+        for (size_t i = 0; i < logSize; ++i) {
+            LogEntry entry;
+            logFile >> entry.term;
+            logFile >> entry.index;
+
+            int mode;
+            logFile >> mode;
+            entry.command.mode = static_cast<Mode>(mode);
+
+            logFile >> entry.command.key;
+            logFile >> entry.command.value;
+
+            state.log.push_back(entry);
+        }
+        logFile.close();
+    }
+}
+
+void Raft::dumpStateToFile(const std::vector<struct LogEntry>& newEntries) {
+    std::ofstream stateFile("/space/state.txt");
+
+    if (stateFile.is_open()) {
+        // Write the state information
+        stateFile << state.currentTerm << " ";
+        stateFile << state.votedFor << "\n";
+
+        // Write the log size
+        stateFile << (state.log.size() + newEntries.size()) << "\n";
+
+        // Close the file
+        stateFile.close();
+    }
+
+    std::ofstream logFile("/space/log.txt", std::ios::out | std::ios::app);
+
+    if (logFile.is_open()) {
+        // Write each log entry
+        for (const auto& entry : newEntries) {
+            logFile << entry.term << " ";
+            logFile << entry.index << " ";
+            logFile << static_cast<int>(entry.command.mode) << " ";
+            logFile << entry.command.key << " ";
+            logFile << entry.command.value << "\n";
+        }
+
+        // Close the file
+        logFile.close();
+    }
+}
+
+Raft::Raft() {
+    loadPersistentState();
 }
