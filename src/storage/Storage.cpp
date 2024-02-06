@@ -23,6 +23,9 @@ Storage::~Storage() {
 }
 
 std::string Storage::getLongUrl(const std::string& shortURL) {
+
+    const std::lock_guard lock(mutex);
+
      // Check if the URL is present
     auto it = shortToLong.find(shortURL);
     if (it != shortToLong.end()) {
@@ -34,6 +37,9 @@ std::string Storage::getLongUrl(const std::string& shortURL) {
 }
 
 std::string Storage::generateShortUrl(const std::string& longURL) {
+
+    const std::lock_guard lock(mutex);
+
     // Check if the URL is present
     auto it = longToShort.find(longURL);
     if (it != longToShort.end()) {

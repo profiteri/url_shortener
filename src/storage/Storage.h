@@ -5,8 +5,11 @@
 #include <string>
 #include <functional>
 #include <fstream>
+#include <mutex>
 
 class Storage {
+
+    mutable std::mutex mutex;
 
     const std::string longToShortFileName = "/space/shortToLong.txt";
     const std::string shortToLongFileName = "/space/longToShort.txt";
