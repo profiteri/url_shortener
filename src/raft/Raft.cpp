@@ -79,21 +79,40 @@ int Raft::receiveRPC(int socket, char* buffer) {
 }
 
 
+void Raft::handleRPC(char* buffer) {
+    unsigned char type = buffer[0];
+    const char* bufferPtr = &buffer[1];
+    if (type == RPCType::appendEntries) {
+        AppendEntries appendEntries;
+        appendEntries.deserialize(bufferPtr);
+        if (appendEntries.entries.empty()) {
+            // heartbeat
+            // update time of last heartbeat`
+        }
+        // ...
+    } else if (type == RPCType::appendEntriesResponse) {
+        AppendEntriesResponse appendEntriesResponse;
+        appendEntriesResponse.deserialize(bufferPtr);
+        // ...
+    } else if (type == RPCType::requestVote) {
+        RequestVote requestVote;
+        requestVote.deserialize(bufferPtr);
+        // ...
+    } else if (type == RPCType::requestVoteResponse) {
+        RequestVoteResponse requestVoteResponse;
+        requestVoteResponse.deserialize(bufferPtr);
+        // ...
+    }
+}
+
+
 void Raft::listenToRPCs() {
     for (const auto& pair : node.nodes) {
         char buffer[4096];
         if (receiveRPC(pair.second, buffer) == -1) {
             continue;
         }
-        char type = buffer[0];
-        const char* bufferPtr = &buffer[1];
-        if (type == RPCType::appendEntries) {
-            AppendEntries appendEntries;
-            appendEntries.deserialize(bufferPtr);
-        } else if (type == RPCType::requestVote) {
-            RequestVote requestVote;
-            requestVote.deserialize(bufferPtr);
-        }
+        handleRPC(buffer);
     }
 }
 

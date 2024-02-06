@@ -32,5 +32,6 @@ private:
     struct State state;
     int receiveRPC(int socket, char* buffer);
     void listenToRPCs();
+    void handleRPC(char* buffer);
 
 };

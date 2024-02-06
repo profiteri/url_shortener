@@ -173,7 +173,6 @@ void RequestVote::serialize(char*& buffer) const {
     size_t lastLogTermNet = htonl(lastLogTerm);
     memcpy(buffer, &lastLogTermNet, sizeof(size_t));
     buffer += sizeof(size_t);
-
 }
 
 
@@ -208,6 +207,92 @@ bool RequestVote::sendRPC(int socket) {
     char buffer[dataSize];
     // Serialize the data into the buffer
     buffer[0] = RPCType::requestVote;
+    char* bufferPtr = &buffer[1];
+    serialize(bufferPtr);
+    // Send the buffer over the socket
+    ssize_t sentBytes = send(socket, buffer, dataSize, 0);
+    return sentBytes == static_cast<ssize_t>(dataSize);
+}
+
+
+void AppendEntriesResponse::serialize(char*& buffer) const {
+    // Serialize each member individually
+    size_t termNet = htonl(term);
+    memcpy(buffer, &termNet, sizeof(size_t));
+    buffer += sizeof(size_t);
+
+    uint8_t successAsUint8 = static_cast<uint8_t>(success);
+    uint32_t successNet = htonl(successAsUint8);
+    memcpy(buffer, &successNet, sizeof(uint32_t));
+    buffer += sizeof(uint32_t);
+}
+
+
+void AppendEntriesResponse::deserialize(const char*& buffer) {
+    // Deserialize each member individually
+    size_t termNet;
+    memcpy(&termNet, buffer, sizeof(size_t));
+    term = ntohl(termNet);
+    buffer += sizeof(size_t);
+
+    uint32_t successNet;
+    memcpy(&successNet, buffer, sizeof(uint32_t));
+    uint8_t successAsUint8 = ntohl(successNet);
+    success = static_cast<bool>(successAsUint8);
+    buffer += sizeof(uint32_t);
+}
+
+bool AppendEntriesResponse::sendRPC(int socket) {
+    // Calculate the size needed for serialization
+    size_t dataSize = sizeof(size_t) + sizeof(uint32_t);
+
+    // Create a buffer to hold the serialized data
+    char buffer[dataSize];
+    // Serialize the data into the buffer
+    buffer[0] = RPCType::appendEntriesResponse;
+    char* bufferPtr = &buffer[1];
+    serialize(bufferPtr);
+    // Send the buffer over the socket
+    ssize_t sentBytes = send(socket, buffer, dataSize, 0);
+    return sentBytes == static_cast<ssize_t>(dataSize);
+}
+
+
+void RequestVoteResponse::serialize(char*& buffer) const {
+    // Serialize each member individually
+    size_t termNet = htonl(term);
+    memcpy(buffer, &termNet, sizeof(size_t));
+    buffer += sizeof(size_t);
+
+    uint8_t voteGrantedAsUint8 = static_cast<uint8_t>(voteGranted);
+    uint32_t voteGrantedNet = htonl(voteGrantedAsUint8);
+    memcpy(buffer, &voteGrantedNet, sizeof(uint32_t));
+    buffer += sizeof(uint32_t);
+}
+
+
+void RequestVoteResponse::deserialize(const char*& buffer) {
+    // Deserialize each member individually
+    size_t termNet;
+    memcpy(&termNet, buffer, sizeof(size_t));
+    term = ntohl(termNet);
+    buffer += sizeof(size_t);
+
+    uint32_t voteGrantedNet;
+    memcpy(&voteGrantedNet, buffer, sizeof(uint32_t));
+    uint8_t voteGrantedAsUint8 = ntohl(voteGrantedNet);
+    voteGranted = static_cast<bool>(voteGrantedAsUint8);
+    buffer += sizeof(uint32_t);
+}
+
+bool RequestVoteResponse::sendRPC(int socket) {
+    // Calculate the size needed for serialization
+    size_t dataSize = sizeof(size_t) + sizeof(uint32_t);
+
+    // Create a buffer to hold the serialized data
+    char buffer[dataSize];
+    // Serialize the data into the buffer
+    buffer[0] = RPCType::requestVoteResponse;
     char* bufferPtr = &buffer[1];
     serialize(bufferPtr);
     // Send the buffer over the socket

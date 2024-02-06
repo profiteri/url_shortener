@@ -5,8 +5,10 @@
 
 
 enum RPCType : unsigned char {
-    appendEntries = 1,
-    requestVote = 2
+    appendEntries,
+    appendEntriesResponse,
+    requestVote,
+    requestVoteResponse
 };
 
 
@@ -58,6 +60,36 @@ public:
     size_t term;
     size_t lastLogIndex;
     size_t lastLogTerm;
+
+    bool sendRPC(int socket);
+
+    void serialize(char*& buffer) const;
+
+    void deserialize(const char*& buffer);
+};
+
+
+struct AppendEntriesResponse {
+
+public:
+
+    size_t term;
+    bool success;
+
+    bool sendRPC(int socket);
+
+    void serialize(char*& buffer) const;
+
+    void deserialize(const char*& buffer);
+};
+
+
+struct RequestVoteResponse {
+
+public:
+
+    size_t term;
+    bool voteGranted;
 
     bool sendRPC(int socket);
 
