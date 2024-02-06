@@ -1,18 +1,12 @@
 #include "http_server/Server.h"
 #include "node/Node.h"
 #include "storage/Storage.h"
+#include "raft/Raft.h"
 
 int main() {
-        
-    Node n;
-    n.start();
 
-    /*
-    Storage s;
-    auto str = s.generateShortUrl("hellohello");
-    auto longStr = s.getLongUrl(str);
-    */
-
+    Raft r;
+    r.run();
     return 0;
 
 }

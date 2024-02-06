@@ -1,5 +1,13 @@
 #include "Raft.h"
 #include <fstream>
+#include <cerrno>
+#include <chrono>
+#include <sys/time.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 void Raft::State::loadPersistentState() {
     size_t logSize;
@@ -105,15 +113,155 @@ void Raft::handleRPC(char* buffer) {
     }
 }
 
+void Raft::sendRPC(const std::string& data, const std::string& to) {
 
-void Raft::listenToRPCs() {
-    for (const auto& pair : node.nodes) {
-        char buffer[4096];
-        if (receiveRPC(pair.second, buffer) == -1) {
-            continue;
+    if (node.writeSockets.count(to) == 0) {
+        std::cout << "Try to connected to: " << to << '\n';
+        if (node.connectToNode(to) == -1) {
+            std::cerr << "Failed to send. Couldn't connect to: " << to << '\n';
+            return;
         }
-        handleRPC(buffer);
     }
+
+    std::cout << "Try send to: " << to << '\n';
+    if (send(node.writeSockets[to], data.c_str(), strlen(data.c_str()), 0) > 0) {
+        std::cout << "Sent successful\n";
+    } else {
+        std::cout << "Error sending msg\n";
+    }
+
+}
+
+void Raft::runElection() {
+    //TODO
+}
+
+void Raft::listenToRPCs(long timeout) {
+
+    int master_socket = node.listeningSocket;
+
+    //set of socket descriptors  
+    fd_set readfds;
+             
+    auto start = std::chrono::steady_clock::now();
+    while(true) {
+
+        //clear the socket set  
+        FD_ZERO(&readfds);
+     
+        //add my socket to set  
+        FD_SET(master_socket, &readfds);   
+        int max_sd = master_socket;   
+             
+        //add nodes sockets to set 
+        for (const auto& pair : node.readSockets) {   
+            //add to read list  
+            FD_SET(pair.second, &readfds);   
+                 
+            //highest file descriptor number, need it for the select function  
+            if (pair.second > max_sd) max_sd = pair.second;   
+        }
+
+        auto elapsed  = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start).count();
+        std::cout << "elapsed: " << elapsed << '\n';
+        if (elapsed >= timeout) {
+            std::cout << "Timeout expired\n";
+            if (state.type == NodeType::Follower) state.type = NodeType::Candidate;
+            else if (state.type == NodeType::Candidate) state.type = NodeType::Follower;
+            return;            
+        }
+        struct timeval tv;
+        tv.tv_sec = timeout - elapsed;
+        tv.tv_usec = 0;
+
+        std::cout << "Seconds left: " << tv.tv_sec << '\n';
+
+        //wait for an activity on one of the sockets
+        std::cout << "Waiting for activity...\n";
+        int activity = select(max_sd + 1, &readfds, NULL, NULL, &tv);   
+       
+        if (activity == -1) { 
+            std::cerr << "Select error: " << errno << " " << std::strerror(errno) << '\n';
+        }
+        else if (activity == 0) {
+            std::cout << "Timeout expired\n";
+            if (state.type == NodeType::Follower) state.type = NodeType::Candidate;
+            else if (state.type == NodeType::Candidate) state.type = NodeType::Follower;
+            return;
+        }
+             
+        //If something happened on my socket,  
+        //then its an incoming connection
+        if(FD_ISSET(master_socket, &readfds)) {
+            node.acceptConnection();
+            continue;
+        }   
+             
+        //else its some IO operation on some other socket 
+        for (auto it = node.readSockets.begin(); it != node.readSockets.end(); ) {
+                 
+            if (FD_ISSET(it->second, &readfds)) {
+                
+                std::vector<char> buffer(4096);
+                int bytesReceived = recv(it->second, &buffer[0], buffer.size(), 0);
+
+                if (bytesReceived == 0) { //someone disconnected
+                    std::cout << "Node disconnected: " << it->first << " on socket: " << it->second << '\n';
+                    close(it->second);
+                    it = node.readSockets.erase(it);
+                } 
+                else if (bytesReceived < 0){ // some error  
+                    std::cerr << "Some error on socket: " << std::strerror(errno) << '\n';
+                    ++it;
+                }
+                else { //message received
+
+                    std::cout << "Received msg from " << it->first << " " << std::string{buffer.begin(), buffer.end()} << '\n';
+                    sendRPC("Nice to meet you!", it->first);
+
+                    //renew timeout
+                    if (state.type == NodeType::Follower) start = std::chrono::steady_clock::now();
+
+                    // TODO: proper handling
+                    ++it;
+                }
+
+            }   
+        }   
+    }
+}
+
+void Raft::run() {
+
+    while(true) {
+
+        if (state.type == NodeType::Follower) {
+
+            std::cout << "Listen to heartbits\n";            
+
+            //setup heartbeats timeout (sec), after which node runs election
+            long timeout = 10;
+            listenToRPCs(timeout);
+
+        }
+
+        else if (state.type == NodeType::Candidate) {
+
+            std::cout << "Start election\n";
+
+            //setup heartbeats timeout, after which node loses election
+            runElection();
+            long timeout = 10;
+            listenToRPCs(timeout);            
+
+        }
+
+        else if (state.type == NodeType::Leader) {
+            //TODO
+        }
+
+    }
+
 }
 
 
