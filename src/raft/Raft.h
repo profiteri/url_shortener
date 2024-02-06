@@ -13,6 +13,10 @@ public:
         size_t currentTerm = 0;
         int votedFor = -1;
         std::vector<struct LogEntry> log;
+
+        void loadPersistentState();
+
+        void dumpStateToFile(const std::vector<struct LogEntry>& newEntries); 
     };
 
     Raft();
@@ -22,8 +26,6 @@ public:
 private:
 
     struct State state;
-    void loadPersistentState();
-    void dumpStateToFile(const std::vector<struct LogEntry>& newEntries);
     int receiveRPC(int socket, char* buffer);
     void listenToRPCs();
 

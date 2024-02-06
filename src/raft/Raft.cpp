@@ -1,12 +1,12 @@
 #include "Raft.h"
 #include <fstream>
 
-void Raft::loadPersistentState() {
+void Raft::State::loadPersistentState() {
     size_t logSize;
     std::ifstream stateFile("/space/state.txt");
     if (stateFile.is_open()) {
-        stateFile >> state.currentTerm;
-        stateFile >> state.votedFor;
+        stateFile >> currentTerm;
+        stateFile >> votedFor;
 
         stateFile >> logSize;
 
@@ -26,22 +26,22 @@ void Raft::loadPersistentState() {
             logFile >> entry.command.key;
             logFile >> entry.command.value;
 
-            state.log.push_back(entry);
+            log.push_back(entry);
         }
         logFile.close();
     }
 }
 
-void Raft::dumpStateToFile(const std::vector<struct LogEntry>& newEntries) {
+void Raft::State::dumpStateToFile(const std::vector<struct LogEntry>& newEntries) {
     std::ofstream stateFile("/space/state.txt");
 
     if (stateFile.is_open()) {
         // Write the state information
-        stateFile << state.currentTerm << " ";
-        stateFile << state.votedFor << "\n";
+        stateFile << currentTerm << " ";
+        stateFile << votedFor << "\n";
 
         // Write the log size
-        stateFile << (state.log.size() + newEntries.size()) << "\n";
+        stateFile << (log.size() + newEntries.size()) << "\n";
 
         // Close the file
         stateFile.close();
@@ -99,5 +99,5 @@ void Raft::listenToRPCs() {
 
 
 Raft::Raft() {
-    loadPersistentState();
+    state.loadPersistentState();
 }
