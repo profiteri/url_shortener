@@ -99,5 +99,5 @@ void Raft::listenToRPCs() {
 
 
 Raft::Raft() {
-    state.loadPersistentState();
+    // do something on initilization
 }
