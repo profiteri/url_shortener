@@ -27,10 +27,6 @@ void Raft::State::loadPersistentState() {
             logFile >> entry.term;
             logFile >> entry.index;
 
-            int mode;
-            logFile >> mode;
-            entry.command.mode = static_cast<Mode>(mode);
-
             logFile >> entry.command.key;
             logFile >> entry.command.value;
 
@@ -62,7 +58,7 @@ void Raft::State::dumpStateToFile(const std::vector<struct LogEntry>& newEntries
         for (const auto& entry : newEntries) {
             logFile << entry.term << " ";
             logFile << entry.index << " ";
-            logFile << static_cast<int>(entry.command.mode) << " ";
+
             logFile << entry.command.key << " ";
             logFile << entry.command.value << "\n";
         }

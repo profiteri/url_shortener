@@ -12,14 +12,7 @@ enum RPCType : unsigned char {
 };
 
 
-enum Mode : unsigned char {
-    shorten = 0,
-    extend = 1
-};
-
-
 struct Command {
-    enum Mode mode; 
     std::string key;
     std::string value;
 };

@@ -42,10 +42,6 @@ void AppendEntries::serialize(char*& buffer) const {
         buffer += sizeof(size_t);
 
         // Serialize the Command struct
-        int modeNet = htonl(static_cast<int>(logEntry.command.mode));
-        memcpy(buffer, &modeNet, sizeof(int));
-        buffer += sizeof(int);
-
         // Serialize the key string
         size_t keyLength = logEntry.command.key.length();
         size_t keyLengthNet = htonl(keyLength);
@@ -111,11 +107,6 @@ void AppendEntries::deserialize(const char*& buffer) {
         buffer += sizeof(size_t);
 
         // Deserialize the Command struct
-        int modeNet;
-        memcpy(&modeNet, buffer, sizeof(int));
-        logEntry.command.mode = static_cast<Mode>(ntohl(modeNet));
-        buffer += sizeof(int);
-
         // Deserialize the key string
         size_t keyLengthNet;
         memcpy(&keyLengthNet, buffer, sizeof(size_t));
@@ -140,7 +131,7 @@ bool AppendEntries::sendRPC(int socket) {
                       sizeof(size_t) + sizeof(size_t);  // Base size for AppendEntries
     // Add size for each LogEntry
     for (const auto& logEntry : entries) {
-        dataSize += sizeof(size_t) + sizeof(size_t) + sizeof(Mode) +
+        dataSize += sizeof(size_t) + sizeof(size_t) +
                     sizeof(size_t) + sizeof(size_t) +
                     logEntry.command.key.size() + 1 +
                     logEntry.command.value.size() + 1;
