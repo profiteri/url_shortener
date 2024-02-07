@@ -37,8 +37,9 @@ private:
 
     struct State state;
     std::string currentLeader;
-    NodeType type = Follower;
+    NodeType nodeType = Follower;
     size_t prevCommitIndex;
+    size_t receivedVotes = 1;
 
     const std::string stateFilename = "/space/state.txt";
     const std::string logFilename = "/space/log.txt";

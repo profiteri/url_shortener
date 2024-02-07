@@ -134,7 +134,11 @@ Node::Node() {
         // throw exception here
         return;
     }
-    
+
+    id = convertIPToInteger(localIpAddress);
+
+    numNodes = nodeAddresses.size();
+
     // use 4343 for commmunication between nodes
     setupListeningSocket("4343");
 

@@ -197,29 +197,62 @@ void Raft::handleFollowerRPC(const std::string& msg, const std::string& from) {
     }
 }
 
-void Raft::handleCandidateRPC(const std::string& buffer) {
+void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
     unsigned char type = buffer[0];
     const char* bufferPtr = &buffer[1];
-    if (type == RPCType::appendEntries) {
-        AppendEntries appendEntries;
-        appendEntries.deserialize(bufferPtr);
-        if (appendEntries.entries.empty()) {
-            // heartbeat
-            // update time of last heartbeat`
+    switch (type) {
+        case RPCType::requestVoteResponse: {
+            RequestVoteResponse requestVoteResponse;
+            requestVoteResponse.deserialize(bufferPtr);
+            if (requestVoteResponse.voteGranted) {
+                receivedVotes++;
+                if (receivedVotes > node.numNodes / 2) {
+                    nodeType = NodeType::Leader;
+                }
+            } else if (requestVoteResponse.term > state.currentTerm) {
+                state.currentTerm = requestVoteResponse.term;
+                nodeType = NodeType::Follower;
+            }
+            break;
         }
-        // ...
-    } else if (type == RPCType::appendEntriesResponse) {
-        AppendEntriesResponse appendEntriesResponse;
-        appendEntriesResponse.deserialize(bufferPtr);
-        // ...
-    } else if (type == RPCType::requestVote) {
-        RequestVote requestVote;
-        requestVote.deserialize(bufferPtr);
-        // ...
-    } else if (type == RPCType::requestVoteResponse) {
-        RequestVoteResponse requestVoteResponse;
-        requestVoteResponse.deserialize(bufferPtr);
-        // ...
+    
+        case RPCType::appendEntries: {
+            AppendEntries appendEntries;
+            appendEntries.deserialize(bufferPtr);
+            if (appendEntries.term < state.currentTerm) {
+                return;
+            }
+            state.currentTerm = appendEntries.term;
+            nodeType = NodeType::Follower;
+            handleAppendEntries(appendEntries);
+            break;
+        }
+
+        case RPCType::requestVote: {
+            RequestVote requestVote;
+            requestVote.deserialize(bufferPtr);
+            if (requestVote.term < state.currentTerm) {
+                RequestVoteResponse response = {
+                    .term = state.currentTerm,
+                    .voteGranted = false
+                }
+                response.sendRPC();
+                return;
+            }
+            nodeType = NodeType::Follower;
+            if (requestVote.term > state.currentTerm) {
+                state.currentTerm = appendEntries.term;
+            }
+            RequestVoteResponse response;
+            response.term = state.currentTerm;
+            if ((state.votedFor == -1 || state.votedFor != requestVote.candidateId) &&
+                (requestVote.lastLogIndex >= state.log.back().index && requestVote.lastLogTerm>= state.log.back().term)) {
+                response.voteGranted = true;
+            } else {
+                response.voteGranted = false;
+            }
+            response.sendRPC();
+        }
     }
 }
 
@@ -269,7 +302,17 @@ void Raft::sendRPC(char* data, const std::string& to) {
 }
 
 void Raft::runElection() {
-    //TODO
+    receivedVotes = 1;
+    state.currentTerm++;
+    RequestVote requestVote = {
+        .candidateId = node.id,
+        .term = state.currentTerm,
+        .lastLogIndex = state.log.back().index,
+        .lastLogTerm = state.log.back().term
+    }
+    for (const std::string& nodeAddress : node.nodeAddresses) {
+        requestVote.sendRPC(nodeAddress);
+    }
 }
 
 // <msg, sender IP>
@@ -362,7 +405,7 @@ void Raft::run() {
 
     while(true) {
         
-        switch (type) {
+        switch (nodeType) {
 
             case NodeType::Follower: {
 
@@ -401,14 +444,13 @@ void Raft::run() {
                 switch (e.first) {
 
                     case EventType::timeout: {
-                        type = NodeType::Follower;
-                        break;
+                        continue;
                     }
 
                     case EventType::message: {
                         auto p = e.second.value();
                         std::cout << "Got msg: " << p.first << '\n';
-                        //handleRPC(p.first);
+                        handleCandidateRPC(p.first, p.second);
                         break;
                     }
                 }
