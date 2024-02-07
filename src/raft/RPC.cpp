@@ -2,6 +2,7 @@
 #include <cstring>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <iostream>
 
 
 void AppendEntries::serialize(char*& buffer) const {
@@ -136,7 +137,7 @@ size_t AppendEntries::getDataSize()
                     logEntry.command.longURL.size() + 1 +
                     logEntry.command.shortURL.size() + 1;
     }
-    return dataSize;
+    return dataSize + 1;
 }
 
 bool AppendEntries::sendRPC(int socket) {
@@ -207,7 +208,7 @@ void RequestVote::deserialize(const char*& buffer) {
 size_t RequestVote::getDataSize()
 {
     size_t dataSize = sizeof(int) + sizeof(size_t) + sizeof(size_t) + sizeof(size_t);
-    return dataSize;
+    return dataSize + 1;
 }
 
 bool RequestVote::sendRPC(int socket) {
@@ -256,7 +257,7 @@ void AppendEntriesResponse::deserialize(const char*& buffer) {
 size_t AppendEntriesResponse::getDataSize()
 {
     size_t dataSize = sizeof(size_t) + sizeof(uint32_t);
-    return dataSize;
+    return dataSize + 1;
 }
 
 bool AppendEntriesResponse::sendRPC(int socket) {
@@ -305,7 +306,7 @@ void RequestVoteResponse::deserialize(const char*& buffer) {
 size_t RequestVoteResponse::getDataSize()
 {
     size_t dataSize = sizeof(size_t) + sizeof(uint32_t);
-    return dataSize;
+    return dataSize + 1;
 }
 
 bool RequestVoteResponse::sendRPC(int socket) {

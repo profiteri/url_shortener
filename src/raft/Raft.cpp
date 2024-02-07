@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <random>
 
 void Raft::loadPersistentState() {
     size_t logSize;
@@ -316,11 +317,13 @@ void Raft::runElection() {
     receivedVotes = 1;
     state.currentTerm++;
     state.votedFor = node.id;
+    size_t logSize = state.log.size();
+
     RequestVote requestVote = {
         .candidateId = node.id,
         .term = state.currentTerm,
-        .lastLogIndex = state.log.back().index,
-        .lastLogTerm = state.log.back().term
+        .lastLogIndex = logSize ? state.log.back().index : 0,
+        .lastLogTerm = logSize ? state.log.back().term : 0
     };
     for (const std::string& nodeAddress : node.nodeAddresses) {
         char msg[requestVote.getDataSize()];
@@ -419,7 +422,7 @@ event Raft::listenToRPCs(long timeout) {
 
 std::random_device rd;
 std::mt19937 gen(rd());
-std::uniform_int_distribution<> distr(50, 250); // milliseconds
+std::uniform_int_distribution<> distr(5000, 6000); // milliseconds
 
 void Raft::run() {
 
@@ -478,7 +481,9 @@ void Raft::run() {
             }
 
             case NodeType::Leader: {
-                //TODO
+                
+                std::cout << "IM LEADER MOTHERFUCKERS\n"; 
+
             }
 
         }
