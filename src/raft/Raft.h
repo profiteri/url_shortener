@@ -21,13 +21,6 @@ public:
         int votedFor = -1;
         std::vector<struct LogEntry> log;
 
-        State() {
-            loadPersistentState();
-        }
-
-        void loadPersistentState();
-
-        void dumpStateToFile(const std::vector<struct LogEntry>& newEntries); 
     };
 
     Raft();
@@ -45,5 +38,8 @@ private:
     void listenToRPCs(long timeout);
     void applyCommand(const Command& command);
     bool compareLogEntries(const LogEntry& first, const LogEntry& second);
+    void loadPersistentState();
+
+    void dumpStateToFile(const std::vector<struct LogEntry>& newEntries); 
 
 };

@@ -9,12 +9,12 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-void Raft::State::loadPersistentState() {
+void Raft::loadPersistentState() {
     size_t logSize;
     std::ifstream stateFile("/space/state.txt");
     if (stateFile.is_open()) {
-        stateFile >> currentTerm;
-        stateFile >> votedFor;
+        stateFile >> state.currentTerm;
+        stateFile >> state.votedFor;
 
         stateFile >> logSize;
 
@@ -30,22 +30,24 @@ void Raft::State::loadPersistentState() {
             logFile >> entry.command.key;
             logFile >> entry.command.value;
 
-            log.push_back(entry);
+            applyCommand(entry.command);
+
+            state.log.push_back(entry);
         }
         logFile.close();
     }
 }
 
-void Raft::State::dumpStateToFile(const std::vector<struct LogEntry>& newEntries) {
+void Raft::dumpStateToFile(const std::vector<struct LogEntry>& newEntries) {
     std::ofstream stateFile("/space/state.txt");
 
     if (stateFile.is_open()) {
         // Write the state information
-        stateFile << currentTerm << " ";
-        stateFile << votedFor << "\n";
+        stateFile << state.currentTerm << " ";
+        stateFile << state.votedFor << "\n";
 
         // Write the log size
-        stateFile << (log.size() + newEntries.size()) << "\n";
+        stateFile << (state.log.size() + newEntries.size()) << "\n";
 
         // Close the file
         stateFile.close();
@@ -277,5 +279,6 @@ void Raft::run() {
 
 
 Raft::Raft() {
+    loadPersistentState();
     // do something on initilization
 }
