@@ -1,13 +1,11 @@
 #pragma once
 
-#include "http_server/Server.h"
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unordered_set>
 #include <unordered_map>
 
 class Node {
-    Server s;
 
 public:
     Node();

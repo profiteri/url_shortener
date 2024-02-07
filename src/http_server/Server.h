@@ -3,6 +3,7 @@
 #include <httpserver.hpp>
 #include <memory>
 #include <iostream>
+#include <raft/Raft.h>
 
 using namespace httpserver;
 
@@ -18,15 +19,24 @@ class Server {
 
     struct cut_url_resource : public http_resource {
         std::shared_ptr<http_response> render(const http_request&);
+
+        Raft& raft;
+
+        cut_url_resource(Raft& raft) : raft(raft) {}
     };
 
     struct expand_url_resource : public http_resource {
         std::shared_ptr<http_response> render(const http_request&);
-    };    
+        Raft& raft;
+
+        expand_url_resource(Raft& raft) : raft(raft) {}
+    }; 
 
 public:
 
-    Server() = default;
+    Raft& r;
+
+    Server(Raft& raft) : r(raft) {}
     void run();
 
 };

@@ -2,11 +2,18 @@
 #include "node/Node.h"
 #include "storage/Storage.h"
 #include "raft/Raft.h"
+#include <thread>
 
 int main() {
-
-    Raft r;
-    r.run();
+    Node node;
+    Storage storage;
+    Raft raft(node, storage);
+    Server server(raft);
+    std::thread server_thread([&server](){
+        server.run();
+    });
+    server_thread.detach();
+    raft.run();
     return 0;
 
 }
