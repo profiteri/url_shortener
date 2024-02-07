@@ -118,47 +118,32 @@ void Raft::handleFollowerRPC(const std::string& msg, const std::string& from) {
         AppendEntries rpc;
         rpc.deserialize(bufferPtr);
 
-        if (rpc.term < state.currentTerm) return;
-
-        else if (rpc.term > state.currentTerm) {
-            state.currentTerm = rpc.term;
-            state.votedFor = -1;
-        }
-
         handleAppendEntries(rpc, from);
 
     } else if (type == RPCType::requestVote) {
 
         RequestVote rpc;
         rpc.deserialize(bufferPtr);
-        
-        if (rpc.term > state.currentTerm) {
-            state.currentTerm = rpc.term;
-            state.votedFor = -1;
-        }
 
-        if ((state.votedFor == -1 || state.votedFor == rpc.candidateId)
-            &&
-            compareLogEntries(rpc.lastLogIndex, rpc.lastLogTerm)) {
-            
-            //grant vote
-            RequestVoteResponse resp;
-            resp.term = state.currentTerm;
-            resp.voteGranted = true;
+        //not vote
+        if (rpc.term < state.currentTerm) {
 
-            char msg[resp.getDataSize()];
+            RequestVoteResponse response = {
+                .term = state.currentTerm,
+                .voteGranted = false
+            };
+            char msg[response.getDataSize()];
             msg[0] = RPCType::requestVoteResponse;
             char* ptr = &msg[1];
-            resp.serialize(ptr);
+            response.serialize(ptr);
             sendRPC(msg, from);
-            return;
+            return;            
 
         }
-    } else {
 
-        std::cerr << "Unrecognized type" << "\n";
+        handleRequestVote(rpc, from);
 
-    }
+    } else std::cerr << "Unrecognized type" << "\n";
 }
 
 void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
@@ -183,12 +168,6 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
         case RPCType::appendEntries: {
             AppendEntries appendEntries;
             appendEntries.deserialize(bufferPtr);
-            if (appendEntries.term < state.currentTerm) {
-                return;
-            } else if (appendEntries.term > state.currentTerm) {
-                state.currentTerm = appendEntries.term;
-                state.votedFor = -1;
-            }
             nodeType = NodeType::Follower;
             handleAppendEntries(appendEntries, from);
             break;
@@ -197,27 +176,22 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
         case RPCType::requestVote: {
             RequestVote requestVote;
             requestVote.deserialize(bufferPtr);
-            if (requestVote.term < state.currentTerm) {
+
+            //not vote
+            if (requestVote.term <= state.currentTerm) {
                 RequestVoteResponse response = {
                     .term = state.currentTerm,
                     .voteGranted = false
-                }
-                response.sendRPC();
+                };
+                char msg[response.getDataSize()];
+                msg[0] = RPCType::requestVoteResponse;
+                char* ptr = &msg[1];
+                response.serialize(ptr);
+                sendRPC(msg, from);
                 return;
             }
             nodeType = NodeType::Follower;
-            if (requestVote.term > state.currentTerm) {
-                state.currentTerm = appendEntries.term;
-            }
-            RequestVoteResponse response;
-            response.term = state.currentTerm;
-            if ((state.votedFor == -1 || state.votedFor != requestVote.candidateId) &&
-                (requestVote.lastLogIndex >= state.log.back().index && requestVote.lastLogTerm>= state.log.back().term)) {
-                response.voteGranted = true;
-            } else {
-                response.voteGranted = false;
-            }
-            response.sendRPC();
+            handleRequestVote(requestVote, from);
         }
     }
 }
@@ -249,6 +223,13 @@ void Raft::handleLeaderRPC(const std::string& buffer) {
 }
 
 void Raft::handleAppendEntries(AppendEntries rpc, const std::string &from) {
+
+    if (rpc.term < state.currentTerm) return;
+
+    else if (rpc.term > state.currentTerm) {
+        state.currentTerm = rpc.term;
+        state.votedFor = -1;
+    }
 
     if (!compareLogEntries(rpc.prevLogIndex, rpc.prevLogTerm)) {
 
@@ -288,10 +269,27 @@ void Raft::handleAppendEntries(AppendEntries rpc, const std::string &from) {
 
 }
 
-void Raft::handleRequestVote(RequestVote, const std::string &from)
-{
+void Raft::handleRequestVote(RequestVote rpc, const std::string &from) {
 
-    
+    if (rpc.term > state.currentTerm) {
+        state.currentTerm = rpc.term;
+        state.votedFor = -1;
+    }
+
+    RequestVoteResponse resp; 
+    resp.term = state.currentTerm;   
+
+    resp.voteGranted = (
+        (state.votedFor == -1 || state.votedFor == rpc.candidateId)
+        &&
+        (rpc.lastLogIndex >= state.log.back().index && rpc.lastLogTerm >= state.log.back().term)
+    ); 
+
+    char msg[resp.getDataSize()];
+    msg[0] = RPCType::requestVoteResponse;
+    char* ptr = &msg[1];
+    resp.serialize(ptr);
+    sendRPC(msg, from);
 
 }
 
@@ -317,14 +315,19 @@ void Raft::sendRPC(char* data, const std::string& to) {
 void Raft::runElection() {
     receivedVotes = 1;
     state.currentTerm++;
+    state.votedFor = node.id;
     RequestVote requestVote = {
         .candidateId = node.id,
         .term = state.currentTerm,
         .lastLogIndex = state.log.back().index,
         .lastLogTerm = state.log.back().term
-    }
+    };
     for (const std::string& nodeAddress : node.nodeAddresses) {
-        requestVote.sendRPC(nodeAddress);
+        char msg[requestVote.getDataSize()];
+        msg[0] = RPCType::appendEntriesResponse;
+        char* ptr = &msg[1];
+        requestVote.serialize(ptr);
+        sendRPC(msg, nodeAddress);        
     }
 }
 
