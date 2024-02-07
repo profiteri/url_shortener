@@ -2,9 +2,17 @@
 
 #include <vector>
 #include <string>
+#include <optional>
 #include "node/Node.h"
 #include "RPC.h"
 #include "storage/Storage.h"
+
+enum EventType { message, timeout };
+
+using event = std::pair< 
+    //                        msg,        sender IP
+    EventType, std::optional<std::pair<std::string, std::string>>
+    >;
 
 class Raft {
 
@@ -35,10 +43,10 @@ private:
     Storage storage;
 
     int receiveRPC(int socket, char* buffer);
-    void handleRPC(char* buffer);
+    void handleRPC(const std::string& buffer);
     void sendRPC(const std::string& data, const std::string& to);
     void runElection();
-    void listenToRPCs(long timeout);
+    event listenToRPCs(long timeout);
     void applyCommand(const Command& command);
     bool compareLogEntries(const LogEntry& first, const LogEntry& second);
     void loadPersistentState();

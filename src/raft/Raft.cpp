@@ -98,7 +98,7 @@ int Raft::receiveRPC(int socket, char* buffer) {
 }
 
 
-void Raft::handleRPC(char* buffer) {
+void Raft::handleRPC(const std::string& buffer) {
     unsigned char type = buffer[0];
     const char* bufferPtr = &buffer[1];
     if (type == RPCType::appendEntries) {
@@ -147,7 +147,8 @@ void Raft::runElection() {
     //TODO
 }
 
-void Raft::listenToRPCs(long timeout) {
+// <msg, sender IP>
+event Raft::listenToRPCs(long timeout) {
 
     int master_socket = node.listeningSocket;
 
@@ -174,13 +175,12 @@ void Raft::listenToRPCs(long timeout) {
         }
 
         auto elapsed  = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start).count();
-        std::cout << "elapsed: " << elapsed << '\n';
+        std::cout << "Elapsed: " << elapsed << '\n';
         if (elapsed >= timeout) {
             std::cout << "Timeout expired\n";
-            if (state.type == NodeType::Follower) state.type = NodeType::Candidate;
-            else if (state.type == NodeType::Candidate) state.type = NodeType::Follower;
-            return;            
+            return {EventType::timeout, std::nullopt};
         }
+
         struct timeval tv;
         tv.tv_sec = timeout - elapsed;
         tv.tv_usec = 0;
@@ -196,9 +196,7 @@ void Raft::listenToRPCs(long timeout) {
         }
         else if (activity == 0) {
             std::cout << "Timeout expired\n";
-            if (state.type == NodeType::Follower) state.type = NodeType::Candidate;
-            else if (state.type == NodeType::Candidate) state.type = NodeType::Follower;
-            return;
+            return {EventType::timeout, std::nullopt};
         }
              
         //If something happened on my socket,  
@@ -226,53 +224,78 @@ void Raft::listenToRPCs(long timeout) {
                     ++it;
                 }
                 else { //message received
-
-                    std::cout << "Received msg from " << it->first << " " << std::string{buffer.begin(), buffer.end()} << '\n';
-                    sendRPC("Nice to meet you!", it->first);
-
-                    //renew timeout
-                    if (state.type == NodeType::Follower) start = std::chrono::steady_clock::now();
-
-                    // TODO: proper handling
+                    std::pair p = {std::string{buffer.begin(), buffer.end()}, it->first};
+                    return {EventType::message, {p}};
                     ++it;
                 }
-
             }   
-        }   
+        }
     }
 }
 
 void Raft::run() {
 
     while(true) {
+        
+        switch (state.type) {
 
-        if (state.type == NodeType::Follower) {
+            case NodeType::Follower: {
 
-            std::cout << "Listen to heartbits\n";            
+                std::cout << "Listen to heartbits\n";            
 
-            //setup heartbeats timeout (sec), after which node runs election
-            long timeout = 10;
-            listenToRPCs(timeout);
+                //setup heartbeats timeout (sec), after which node runs election
+                long timeout = 10;
+                event e = listenToRPCs(timeout);
+
+                switch (e.first) {
+
+                    case EventType::timeout: {
+                        state.type = NodeType::Candidate;
+                        break;
+                    }
+
+                    case EventType::message: {
+                        auto p = e.second.value();
+                        std::cout << "Got msg: " << p.first << '\n';
+                        handleRPC(p.first);
+                        break;
+                    }
+                }
+                break;
+            }
+
+            case NodeType::Candidate: {
+
+                std::cout << "Start election\n";
+
+                runElection();
+
+                long timeout = 10;
+                event e = listenToRPCs(timeout);
+
+                switch (e.first) {
+
+                    case EventType::timeout: {
+                        state.type = NodeType::Follower;
+                        break;
+                    }
+
+                    case EventType::message: {
+                        auto p = e.second.value();
+                        std::cout << "Got msg: " << p.first << '\n';
+                        //handleRPC(p.first);
+                        break;
+                    }
+                }
+                break;
+            }
+
+            case NodeType::Leader: {
+                //TODO
+            }
 
         }
-
-        else if (state.type == NodeType::Candidate) {
-
-            std::cout << "Start election\n";
-
-            //setup heartbeats timeout, after which node loses election
-            runElection();
-            long timeout = 10;
-            listenToRPCs(timeout);            
-
-        }
-
-        else if (state.type == NodeType::Leader) {
-            //TODO
-        }
-
     }
-
 }
 
 
