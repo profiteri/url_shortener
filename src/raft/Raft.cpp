@@ -355,7 +355,7 @@ event Raft::listenToRPCs(long timeout) {
             if (pair.second > max_sd) max_sd = pair.second;   
         }
 
-        auto elapsed  = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start).count();
+        auto elapsed  = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
         std::cout << "Elapsed: " << elapsed << '\n';
         if (elapsed >= timeout) {
             std::cout << "Timeout expired\n";
@@ -363,8 +363,8 @@ event Raft::listenToRPCs(long timeout) {
         }
 
         struct timeval tv;
-        tv.tv_sec = timeout - elapsed;
-        tv.tv_usec = 0;
+        tv.tv_sec = (timeout - elapsed) / 1000;
+        tv.tv_usec = ((timeout - elapsed) % 1000) * 1000;
 
         std::cout << "Seconds left: " << tv.tv_sec << '\n';
 
@@ -414,6 +414,10 @@ event Raft::listenToRPCs(long timeout) {
     }
 }
 
+std::random_device rd;
+std::mt19937 gen(rd());
+std::uniform_int_distribution<> distr(50, 250); // milliseconds
+
 void Raft::run() {
 
     while(true) {
@@ -425,7 +429,7 @@ void Raft::run() {
                 std::cout << "Listen to heartbits\n";            
 
                 //setup heartbeats timeout (sec), after which node runs election
-                long timeout = 10;
+                long timeout = static_cast<long>(distr(gen));
                 event e = listenToRPCs(timeout);
 
                 switch (e.first) {
@@ -451,7 +455,7 @@ void Raft::run() {
 
                 runElection();
 
-                long timeout = 10;
+                long timeout = static_cast<long>(distr(gen));
                 event e = listenToRPCs(timeout);
 
                 switch (e.first) {
