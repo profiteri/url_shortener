@@ -44,13 +44,11 @@ void Raft::applyCommand(const Command& command) {
 }
 
 
-bool Raft::compareLogEntries(size_t prevLogIndex, size_t prevLogTerm) {    
-    return false;
-    /*
-    return first.term == second.term &&
-        first.index == second.index &&
-        first.command.longURL == second.command.longURL &&
-        first.command.shortURL == second.command.shortURL;*/
+bool Raft::compareLogEntries(size_t prevLogIndex, size_t prevLogTerm) {
+    if (prevLogIndex >= state.log.size()) {
+        return false;
+    }
+    return state.log[prevLogIndex].term == prevLogTerm;
 }
 
 
