@@ -42,6 +42,8 @@ public:
     void serialize(char*& buffer) const;
 
     void deserialize(const char*& buffer);
+
+    size_t getDataSize();
 };
 
 
@@ -59,6 +61,8 @@ public:
     void serialize(char*& buffer) const;
 
     void deserialize(const char*& buffer);
+
+    size_t getDataSize();
 };
 
 
@@ -74,6 +78,8 @@ public:
     void serialize(char*& buffer) const;
 
     void deserialize(const char*& buffer);
+
+    size_t getDataSize();
 };
 
 
@@ -89,4 +95,6 @@ public:
     void serialize(char*& buffer) const;
 
     void deserialize(const char*& buffer);
+
+    size_t getDataSize();
 };

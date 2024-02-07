@@ -44,11 +44,13 @@ void Raft::applyCommand(const Command& command) {
 }
 
 
-bool Raft::compareLogEntries(const LogEntry& first, const LogEntry& second) {
+bool Raft::compareLogEntries(size_t prevLogIndex, size_t prevLogTerm) {    
+    return false;
+    /*
     return first.term == second.term &&
         first.index == second.index &&
         first.command.longURL == second.command.longURL &&
-        first.command.shortURL == second.command.shortURL;
+        first.command.shortURL == second.command.shortURL;*/
 }
 
 
@@ -109,25 +111,89 @@ int Raft::receiveRPC(int socket, char* buffer) {
 }
 
 void Raft::handleFollowerRPC(const std::string& msg, const std::string& from) {
+
     unsigned char type = msg[0];
     const char* bufferPtr = &msg[1];
+
     if (type == RPCType::appendEntries) {
+
         AppendEntries rpc;
         rpc.deserialize(bufferPtr);
-        if (rpc.entries.empty()) {
-            // heartbeat
-            // update time of last heartbeat`
+
+        if (rpc.term < state.currentTerm) return;
+
+        else if (rpc.term > state.currentTerm) {
+            state.currentTerm = rpc.term;
+            state.votedFor = -1;
         }
-        else {
-            appendLogs(rpc.prevLogIndex, rpc.entries);
-            commitLogsToFile(prevCommitIndex, rpc.commitIndex);
-            commitStateToFile();
-            commitToStorage(prevCommitIndex, rpc.commitIndex);
+
+        else if (!compareLogEntries(rpc.prevLogIndex, rpc.prevLogTerm)) {
+
+            //send fail
+            AppendEntriesResponse resp;
+            resp.term = state.currentTerm;
+            resp.success = false;
+            
+            char msg[resp.getDataSize()];
+            msg[0] = RPCType::appendEntriesResponse;
+            char* ptr = &msg[1];
+            resp.serialize(ptr);
+            sendRPC(msg, from);
+            return;
+
         }
+
+        //delete & append
+        appendLogs(rpc.prevLogIndex, rpc.entries);
+
+        //advance state machine
+        commitLogsToFile(prevCommitIndex, rpc.commitIndex);
+        commitStateToFile();
+        commitToStorage(prevCommitIndex, rpc.commitIndex);
+
+        //send success
+        AppendEntriesResponse resp;
+        resp.term = state.currentTerm;
+        resp.success = true;
+
+        char msg[resp.getDataSize()];
+        msg[0] = RPCType::appendEntriesResponse;
+        char* ptr = &msg[1];
+        resp.serialize(ptr);
+        sendRPC(msg, from);
+        return;
+
     } else if (type == RPCType::requestVote) {
+
         RequestVote rpc;
         rpc.deserialize(bufferPtr);
-        // ...
+        
+        if (rpc.term > state.currentTerm) {
+            state.currentTerm = rpc.term;
+            state.votedFor = -1;
+        }
+
+        if ((state.votedFor == -1 || state.votedFor == rpc.candidateId)
+            &&
+            compareLogEntries(rpc.lastLogIndex, rpc.lastLogTerm)) {
+            
+            //grant vote
+            RequestVoteResponse resp;
+            resp.term = state.currentTerm;
+            resp.voteGranted = true;
+
+            char msg[resp.getDataSize()];
+            msg[0] = RPCType::requestVoteResponse;
+            char* ptr = &msg[1];
+            resp.serialize(ptr);
+            sendRPC(msg, from);
+            return;
+
+        }
+    } else {
+
+        std::cerr << "Unrecognized type" << "\n";
+
     }
 }
 
@@ -183,7 +249,7 @@ void Raft::handleLeaderRPC(const std::string& buffer) {
     }
 }
 
-void Raft::sendRPC(const std::string& data, const std::string& to) {
+void Raft::sendRPC(char* data, const std::string& to) {
 
     if (node.writeSockets.count(to) == 0) {
         std::cout << "Try to connected to: " << to << '\n';
@@ -194,7 +260,7 @@ void Raft::sendRPC(const std::string& data, const std::string& to) {
     }
 
     std::cout << "Try send to: " << to << '\n';
-    if (send(node.writeSockets[to], data.c_str(), strlen(data.c_str()), 0) > 0) {
+    if (send(node.writeSockets[to], data, strlen(data), 0) > 0) {
         std::cout << "Sent successful\n";
     } else {
         std::cout << "Error sending msg\n";
@@ -316,7 +382,7 @@ void Raft::run() {
                     case EventType::message: {
                         auto p = e.second.value();
                         std::cout << "Got msg: " << p.first << '\n';
-                        handleRPC(p.first);
+                        handleFollowerRPC(p.first);
                         break;
                     }
                 }

@@ -125,6 +125,13 @@ void AppendEntries::deserialize(const char*& buffer) {
     }
 }
 
+size_t AppendEntries::getDataSize()
+{
+    size_t dataSize = sizeof(size_t) + sizeof(int) + sizeof(size_t) + sizeof(size_t) +
+                      sizeof(size_t) + sizeof(size_t);  // Base size for AppendEntries
+    return dataSize;
+}
+
 bool AppendEntries::sendRPC(int socket) {
     // Calculate the size needed for serialization
     size_t dataSize = sizeof(size_t) + sizeof(int) + sizeof(size_t) + sizeof(size_t) +
@@ -190,6 +197,12 @@ void RequestVote::deserialize(const char*& buffer) {
     buffer += sizeof(size_t);
 }
 
+size_t RequestVote::getDataSize()
+{
+    size_t dataSize = sizeof(int) + sizeof(size_t) + sizeof(size_t) + sizeof(size_t);
+    return dataSize;
+}
+
 bool RequestVote::sendRPC(int socket) {
     // Calculate the size needed for serialization
     size_t dataSize = sizeof(int) + sizeof(size_t) + sizeof(size_t) + sizeof(size_t);
@@ -233,6 +246,12 @@ void AppendEntriesResponse::deserialize(const char*& buffer) {
     buffer += sizeof(uint32_t);
 }
 
+size_t AppendEntriesResponse::getDataSize()
+{
+    size_t dataSize = sizeof(size_t) + sizeof(uint32_t);
+    return dataSize;
+}
+
 bool AppendEntriesResponse::sendRPC(int socket) {
     // Calculate the size needed for serialization
     size_t dataSize = sizeof(size_t) + sizeof(uint32_t);
@@ -274,6 +293,12 @@ void RequestVoteResponse::deserialize(const char*& buffer) {
     uint8_t voteGrantedAsUint8 = ntohl(voteGrantedNet);
     voteGranted = static_cast<bool>(voteGrantedAsUint8);
     buffer += sizeof(uint32_t);
+}
+
+size_t RequestVoteResponse::getDataSize()
+{
+    size_t dataSize = sizeof(size_t) + sizeof(uint32_t);
+    return dataSize;
 }
 
 bool RequestVoteResponse::sendRPC(int socket) {

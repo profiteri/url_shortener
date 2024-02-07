@@ -48,18 +48,18 @@ private:
     
     int receiveRPC(int socket, char* buffer);
 
-    void handleFollowerRPC(const std::string& buffer);
+    void handleFollowerRPC(const std::string& msg, const std::string& from);
     void handleCandidateRPC(const std::string& buffer);
     void handleLeaderRPC(const std::string& buffer);
 
-    void sendRPC(const std::string& data, const std::string& to);
+    void sendRPC(char* data, const std::string& to);
     void runElection();
     event listenToRPCs(long timeout);
 
     void loadPersistentState();
     void applyCommand(const Command& command);
 
-    bool compareLogEntries(const LogEntry& first, const LogEntry& second);
+    bool compareLogEntries(size_t prevLogIndex, size_t prevLogTerm);
 
     void appendLogs(size_t prevLogIndex, const std::vector<struct LogEntry>& newEntries);
 
