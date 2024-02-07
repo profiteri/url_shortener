@@ -125,41 +125,7 @@ void Raft::handleFollowerRPC(const std::string& msg, const std::string& from) {
             state.votedFor = -1;
         }
 
-        else if (!compareLogEntries(rpc.prevLogIndex, rpc.prevLogTerm)) {
-
-            //send fail
-            AppendEntriesResponse resp;
-            resp.term = state.currentTerm;
-            resp.success = false;
-            
-            char msg[resp.getDataSize()];
-            msg[0] = RPCType::appendEntriesResponse;
-            char* ptr = &msg[1];
-            resp.serialize(ptr);
-            sendRPC(msg, from);
-            return;
-
-        }
-
-        //delete & append
-        appendLogs(rpc.prevLogIndex, rpc.entries);
-
-        //advance state machine
-        commitLogsToFile(prevCommitIndex, rpc.commitIndex);
-        commitStateToFile();
-        commitToStorage(prevCommitIndex, rpc.commitIndex);
-
-        //send success
-        AppendEntriesResponse resp;
-        resp.term = state.currentTerm;
-        resp.success = true;
-
-        char msg[resp.getDataSize()];
-        msg[0] = RPCType::appendEntriesResponse;
-        char* ptr = &msg[1];
-        resp.serialize(ptr);
-        sendRPC(msg, from);
-        return;
+        handleAppendEntries(rpc, from);
 
     } else if (type == RPCType::requestVote) {
 
@@ -219,10 +185,12 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
             appendEntries.deserialize(bufferPtr);
             if (appendEntries.term < state.currentTerm) {
                 return;
+            } else if (appendEntries.term > state.currentTerm) {
+                state.currentTerm = appendEntries.term;
+                state.votedFor = -1;
             }
-            state.currentTerm = appendEntries.term;
             nodeType = NodeType::Follower;
-            handleAppendEntries(appendEntries);
+            handleAppendEntries(appendEntries, from);
             break;
         }
 
@@ -282,12 +250,49 @@ void Raft::handleLeaderRPC(const std::string& buffer) {
 
 void Raft::handleAppendEntries(AppendEntries rpc, const std::string &from) {
 
-    
+    if (!compareLogEntries(rpc.prevLogIndex, rpc.prevLogTerm)) {
+
+        //send fail
+        AppendEntriesResponse resp;
+        resp.term = state.currentTerm;
+        resp.success = false;
+        
+        char msg[resp.getDataSize()];
+        msg[0] = RPCType::appendEntriesResponse;
+        char* ptr = &msg[1];
+        resp.serialize(ptr);
+        sendRPC(msg, from);
+        return;
+
+    }
+
+    //delete & append
+    appendLogs(rpc.prevLogIndex, rpc.entries);
+
+    //advance state machine
+    commitLogsToFile(prevCommitIndex, rpc.commitIndex);
+    commitStateToFile();
+    commitToStorage(prevCommitIndex, rpc.commitIndex);
+
+    //send success
+    AppendEntriesResponse resp;
+    resp.term = state.currentTerm;
+    resp.success = true;
+
+    char msg[resp.getDataSize()];
+    msg[0] = RPCType::appendEntriesResponse;
+    char* ptr = &msg[1];
+    resp.serialize(ptr);
+    sendRPC(msg, from);
+    return;
 
 }
 
 void Raft::handleRequestVote(RequestVote, const std::string &from)
 {
+
+    
+
 }
 
 void Raft::sendRPC(char* data, const std::string& to) {
