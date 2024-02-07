@@ -38,7 +38,8 @@ void Raft::loadPersistentState() {
     }
 }
 
-void Raft::dumpStateToFile(const std::vector<struct LogEntry>& newEntries) {
+void Raft::commitLogsToFile(size_t prevCommitIndex, size_t commitIndex) {
+    /*
     std::ofstream stateFile(stateFilename);
 
     if (stateFile.is_open()) {
@@ -68,6 +69,7 @@ void Raft::dumpStateToFile(const std::vector<struct LogEntry>& newEntries) {
         // Close the file
         logFile.close();
     }
+    */
 }
 
 
@@ -83,6 +85,21 @@ bool Raft::compareLogEntries(const LogEntry& first, const LogEntry& second) {
         first.command.shortURL == second.command.shortURL;
 }
 
+void Raft::appendLogs(size_t prevLogIndex, const std::vector<struct LogEntry> &newEntries)
+{
+}
+
+void Raft::commitLogsToFile(size_t prevCommitIndex, size_t commitIndex)
+{
+}
+
+void Raft::commitStateToFile()
+{
+}
+
+void Raft::commitToStorage(size_t prevCommitIndex, size_t commitIndex)
+{
+}
 
 int Raft::receiveRPC(int socket, char* buffer) {
     int bytesReceived = recv(socket, buffer, sizeof(buffer), 0);
@@ -237,7 +254,7 @@ void Raft::run() {
 
     while(true) {
         
-        switch (state.type) {
+        switch (type) {
 
             case NodeType::Follower: {
 
@@ -250,7 +267,7 @@ void Raft::run() {
                 switch (e.first) {
 
                     case EventType::timeout: {
-                        state.type = NodeType::Candidate;
+                        type = NodeType::Candidate;
                         break;
                     }
 
@@ -276,7 +293,7 @@ void Raft::run() {
                 switch (e.first) {
 
                     case EventType::timeout: {
-                        state.type = NodeType::Follower;
+                        type = NodeType::Follower;
                         break;
                     }
 
