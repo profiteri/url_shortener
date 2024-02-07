@@ -38,40 +38,6 @@ void Raft::loadPersistentState() {
     }
 }
 
-void Raft::commitLogsToFile(size_t prevCommitIndex, size_t commitIndex) {
-    /*
-    std::ofstream stateFile(stateFilename);
-
-    if (stateFile.is_open()) {
-        // Write the state information
-        stateFile << state.currentTerm << " ";
-        stateFile << state.votedFor << "\n";
-
-        // Write the log size
-        stateFile << (state.log.size() + newEntries.size()) << "\n";
-
-        // Close the file
-        stateFile.close();
-    }
-
-    std::ofstream logFile(logFilename, std::ios::out | std::ios::app);
-
-    if (logFile.is_open()) {
-        // Write each log entry
-        for (const auto& entry : newEntries) {
-            logFile << entry.term << " ";
-            logFile << entry.index << " ";
-
-            logFile << entry.command.longURL << " ";
-            logFile << entry.command.shortURL << "\n";
-        }
-
-        // Close the file
-        logFile.close();
-    }
-    */
-}
-
 
 void Raft::applyCommand(const Command& command) {
     storage.insertURL(command.longURL, command.shortURL);
@@ -85,21 +51,49 @@ bool Raft::compareLogEntries(const LogEntry& first, const LogEntry& second) {
         first.command.shortURL == second.command.shortURL;
 }
 
-void Raft::appendLogs(size_t prevLogIndex, const std::vector<struct LogEntry> &newEntries)
-{
+
+void Raft::appendLogs(size_t prevLogIndex, const std::vector<struct LogEntry> &newEntries) {
+    state.log.insert(state.log.begin() + prevLogIndex + 1, newEntries.begin(), newEntries.end());
 }
 
-void Raft::commitLogsToFile(size_t prevCommitIndex, size_t commitIndex)
-{
+
+void Raft::commitLogsToFile(size_t prevCommitIndex, size_t commitIndex) {
+    std::ofstream logFile(logFilename, std::ios::out | std::ios::app);
+
+    if (logFile.is_open()) {
+        for (size_t i = prevCommitIndex + 1; i <= commitIndex; i++) {
+            const struct LogEntry& entry = state.log[i];
+            logFile << entry.term << " ";
+            logFile << entry.index << " ";
+
+            logFile << entry.command.longURL << " ";
+            logFile << entry.command.shortURL << "\n";
+        }
+
+        logFile.close();
+    }
 }
 
-void Raft::commitStateToFile()
-{
+
+void Raft::commitStateToFile() {
+    std::ofstream stateFile(stateFilename);
+    if (stateFile.is_open()) {
+        // Write the state information
+        stateFile << state.currentTerm << " ";
+        stateFile << state.votedFor << "\n";
+
+        stateFile.close();
+    }
 }
 
-void Raft::commitToStorage(size_t prevCommitIndex, size_t commitIndex)
-{
+
+void Raft::commitToStorage(size_t prevCommitIndex, size_t commitIndex) {
+    for (size_t i = prevCommitIndex + 1; i <= commitIndex; i++) {
+        const struct LogEntry& entry = state.log[i];
+        applyCommand(entry.command);
+    }
 }
+
 
 int Raft::receiveRPC(int socket, char* buffer) {
     int bytesReceived = recv(socket, buffer, sizeof(buffer), 0);
