@@ -198,8 +198,8 @@ void Raft::handleFollowerRPC(const std::string& msg, const std::string& from) {
 }
 
 void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
-    unsigned char type = buffer[0];
-    const char* bufferPtr = &buffer[1];
+    unsigned char type = msg[0];
+    const char* bufferPtr = &msg[1];
     switch (type) {
         case RPCType::requestVoteResponse: {
             RequestVoteResponse requestVoteResponse;
@@ -280,6 +280,16 @@ void Raft::handleLeaderRPC(const std::string& buffer) {
         requestVoteResponse.deserialize(bufferPtr);
         // ...
     }
+}
+
+void Raft::handleAppendEntries(AppendEntries rpc, const std::string &from) {
+
+    
+
+}
+
+void Raft::handleRequestVote(RequestVote, const std::string &from)
+{
 }
 
 void Raft::sendRPC(char* data, const std::string& to) {
@@ -418,14 +428,14 @@ void Raft::run() {
                 switch (e.first) {
 
                     case EventType::timeout: {
-                        type = NodeType::Candidate;
+                        nodeType = NodeType::Candidate;
                         break;
                     }
 
                     case EventType::message: {
                         auto p = e.second.value();
                         std::cout << "Got msg: " << p.first << '\n';
-                        handleFollowerRPC(p.first);
+                        handleFollowerRPC(p.first, p.second);
                         break;
                     }
                 }

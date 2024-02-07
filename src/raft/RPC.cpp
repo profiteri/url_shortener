@@ -129,6 +129,13 @@ size_t AppendEntries::getDataSize()
 {
     size_t dataSize = sizeof(size_t) + sizeof(int) + sizeof(size_t) + sizeof(size_t) +
                       sizeof(size_t) + sizeof(size_t);  // Base size for AppendEntries
+    // Add size for each LogEntry
+    for (const auto& logEntry : entries) {
+        dataSize += sizeof(size_t) + sizeof(size_t) +
+                    sizeof(size_t) + sizeof(size_t) +
+                    logEntry.command.longURL.size() + 1 +
+                    logEntry.command.shortURL.size() + 1;
+    }
     return dataSize;
 }
 

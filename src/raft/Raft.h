@@ -50,8 +50,11 @@ private:
     int receiveRPC(int socket, char* buffer);
 
     void handleFollowerRPC(const std::string& msg, const std::string& from);
-    void handleCandidateRPC(const std::string& buffer);
+    void handleCandidateRPC(const std::string& msg, const std::string& from);
     void handleLeaderRPC(const std::string& buffer);
+
+    void handleAppendEntries(AppendEntries, const std::string& from);
+    void handleRequestVote(RequestVote, const std::string& from);
 
     void sendRPC(char* data, const std::string& to);
     void runElection();
