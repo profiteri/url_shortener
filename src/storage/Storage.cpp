@@ -67,3 +67,10 @@ std::string Storage::generateShortUrl(const std::string& longURL) {
 
     return shortHash;
 }
+
+void Storage::insertURL(const std::string& longURL, const std::string& shortURL) {
+    const std::lock_guard lock(mutex);
+
+    longToShort[longURL] = shortURL;
+    shortToLong[shortURL] = longURL;
+}

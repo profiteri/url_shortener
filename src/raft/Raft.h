@@ -4,6 +4,7 @@
 #include <string>
 #include "node/Node.h"
 #include "RPC.h"
+#include "storage/Storage.h"
 
 class Raft {
 
@@ -20,7 +21,6 @@ public:
         size_t currentTerm = 0;
         int votedFor = -1;
         std::vector<struct LogEntry> log;
-
     };
 
     Raft();
@@ -30,6 +30,7 @@ private:
 
     struct State state;
     Node node{};
+    Storage storage;
 
     int receiveRPC(int socket, char* buffer);
     void handleRPC(char* buffer);

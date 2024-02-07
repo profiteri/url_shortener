@@ -42,21 +42,21 @@ void AppendEntries::serialize(char*& buffer) const {
         buffer += sizeof(size_t);
 
         // Serialize the Command struct
-        // Serialize the key string
-        size_t keyLength = logEntry.command.key.length();
-        size_t keyLengthNet = htonl(keyLength);
-        memcpy(buffer, &keyLengthNet, sizeof(size_t));
+        // Serialize the longURL string
+        size_t longURLLength = logEntry.command.longURL.length();
+        size_t longURLLengthNet = htonl(longURLLength);
+        memcpy(buffer, &longURLLengthNet, sizeof(size_t));
         buffer += sizeof(size_t);
-        memcpy(buffer, logEntry.command.key.c_str(), keyLength);
-        buffer += keyLength;
+        memcpy(buffer, logEntry.command.longURL.c_str(), longURLLength);
+        buffer += longURLLength;
 
-        // Serialize the value string
-        size_t valueLength = logEntry.command.value.length();
-        size_t valueLengthNet = htonl(valueLength);
-        memcpy(buffer, &valueLengthNet, sizeof(size_t));
+        // Serialize the shortURL string
+        size_t shortURLLength = logEntry.command.shortURL.length();
+        size_t shortURLLengthNet = htonl(shortURLLength);
+        memcpy(buffer, &shortURLLengthNet, sizeof(size_t));
         buffer += sizeof(size_t);
-        memcpy(buffer, logEntry.command.value.c_str(), valueLength);
-        buffer += valueLength;
+        memcpy(buffer, logEntry.command.shortURL.c_str(), shortURLLength);
+        buffer += shortURLLength;
     }
 }
 
@@ -107,21 +107,21 @@ void AppendEntries::deserialize(const char*& buffer) {
         buffer += sizeof(size_t);
 
         // Deserialize the Command struct
-        // Deserialize the key string
-        size_t keyLengthNet;
-        memcpy(&keyLengthNet, buffer, sizeof(size_t));
-        size_t keyLength = ntohl(keyLengthNet);
+        // Deserialize the longURL string
+        size_t longURLLengthNet;
+        memcpy(&longURLLengthNet, buffer, sizeof(size_t));
+        size_t longURLLength = ntohl(longURLLengthNet);
         buffer += sizeof(size_t);
-        logEntry.command.key.assign(buffer, keyLength);
-        buffer += keyLength;
+        logEntry.command.longURL.assign(buffer, longURLLength);
+        buffer += longURLLength;
 
-        // Deserialize the value string
-        size_t valueLengthNet;
-        memcpy(&valueLengthNet, buffer, sizeof(size_t));
-        size_t valueLength = ntohl(valueLengthNet);
+        // Deserialize the shortURL string
+        size_t shortURLLengthNet;
+        memcpy(&shortURLLengthNet, buffer, sizeof(size_t));
+        size_t shortURLLength = ntohl(shortURLLengthNet);
         buffer += sizeof(size_t);
-        logEntry.command.value.assign(buffer, valueLength);
-        buffer += valueLength;
+        logEntry.command.shortURL.assign(buffer, shortURLLength);
+        buffer += shortURLLength;
     }
 }
 
@@ -133,8 +133,8 @@ bool AppendEntries::sendRPC(int socket) {
     for (const auto& logEntry : entries) {
         dataSize += sizeof(size_t) + sizeof(size_t) +
                     sizeof(size_t) + sizeof(size_t) +
-                    logEntry.command.key.size() + 1 +
-                    logEntry.command.value.size() + 1;
+                    logEntry.command.longURL.size() + 1 +
+                    logEntry.command.shortURL.size() + 1;
     }
     // Create a buffer to hold the serialized data
     char buffer[dataSize];

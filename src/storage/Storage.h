@@ -29,5 +29,6 @@ public:
 
     std::string getLongUrl(const std::string& shortUrl);
     std::string generateShortUrl(const std::string& longUrl);
+    void insertURL(const std::string& longURL, const std::string& shortURL);
 
 };

@@ -13,8 +13,8 @@ enum RPCType : unsigned char {
 
 
 struct Command {
-    std::string key;
-    std::string value;
+    std::string longURL;
+    std::string shortURL;
 };
 
 

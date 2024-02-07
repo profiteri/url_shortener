@@ -27,8 +27,8 @@ void Raft::loadPersistentState() {
             logFile >> entry.term;
             logFile >> entry.index;
 
-            logFile >> entry.command.key;
-            logFile >> entry.command.value;
+            logFile >> entry.command.longURL;
+            logFile >> entry.command.shortURL;
 
             applyCommand(entry.command);
 
@@ -61,8 +61,8 @@ void Raft::dumpStateToFile(const std::vector<struct LogEntry>& newEntries) {
             logFile << entry.term << " ";
             logFile << entry.index << " ";
 
-            logFile << entry.command.key << " ";
-            logFile << entry.command.value << "\n";
+            logFile << entry.command.longURL << " ";
+            logFile << entry.command.shortURL << "\n";
         }
 
         // Close the file
@@ -72,17 +72,15 @@ void Raft::dumpStateToFile(const std::vector<struct LogEntry>& newEntries) {
 
 
 void Raft::applyCommand(const Command& command) {
-    // node.insertURL(command.key, command.value);
-    // placeholder
-    auto value = command.value;
+    storage.insertURL(command.longURL, command.shortURL);
 }
 
 
 bool Raft::compareLogEntries(const LogEntry& first, const LogEntry& second) {
     return first.term == second.term &&
         first.index == second.index &&
-        first.command.key == second.command.key &&
-        first.command.value == second.command.value;
+        first.command.longURL == second.command.longURL &&
+        first.command.shortURL == second.command.shortURL;
 }
 
 
