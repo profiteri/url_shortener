@@ -43,5 +43,7 @@ private:
     void sendRPC(const std::string& data, const std::string& to);
     void runElection();
     void listenToRPCs(long timeout);
+    void applyCommand(const Command& command);
+    bool compareLogEntries(const LogEntry& first, const LogEntry& second);
 
 };

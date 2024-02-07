@@ -69,6 +69,21 @@ void Raft::State::dumpStateToFile(const std::vector<struct LogEntry>& newEntries
 }
 
 
+void Raft::applyCommand(const Command& command) {
+    // node.insertURL(command.key, command.value);
+    // placeholder
+    auto value = command.value;
+}
+
+
+bool Raft::compareLogEntries(const LogEntry& first, const LogEntry& second) {
+    return first.term == second.term &&
+        first.index == second.index &&
+        first.command.key == second.command.key &&
+        first.command.value == second.command.value;
+}
+
+
 int Raft::receiveRPC(int socket, char* buffer) {
     int bytesReceived = recv(socket, buffer, sizeof(buffer), 0);
     
