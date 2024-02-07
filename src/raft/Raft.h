@@ -47,7 +47,11 @@ private:
 
     
     int receiveRPC(int socket, char* buffer);
-    void handleRPC(const std::string& buffer);
+
+    void handleFollowerRPC(const std::string& buffer);
+    void handleCandidateRPC(const std::string& buffer);
+    void handleLeaderRPC(const std::string& buffer);
+
     void sendRPC(const std::string& data, const std::string& to);
     void runElection();
     event listenToRPCs(long timeout);

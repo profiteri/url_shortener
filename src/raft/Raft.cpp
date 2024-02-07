@@ -108,8 +108,56 @@ int Raft::receiveRPC(int socket, char* buffer) {
 
 }
 
+void Raft::handleFollowerRPC(const std::string& msg, const std::string& from) {
+    unsigned char type = msg[0];
+    const char* bufferPtr = &msg[1];
+    if (type == RPCType::appendEntries) {
+        AppendEntries rpc;
+        rpc.deserialize(bufferPtr);
+        if (rpc.entries.empty()) {
+            // heartbeat
+            // update time of last heartbeat`
+        }
+        else {
+            appendLogs(rpc.prevLogIndex, rpc.entries);
+            commitLogsToFile(prevCommitIndex, rpc.commitIndex);
+            commitStateToFile();
+            commitToStorage(prevCommitIndex, rpc.commitIndex);
+        }
+    } else if (type == RPCType::requestVote) {
+        RequestVote rpc;
+        rpc.deserialize(bufferPtr);
+        // ...
+    }
+}
 
-void Raft::handleRPC(const std::string& buffer) {
+void Raft::handleCandidateRPC(const std::string& buffer) {
+    unsigned char type = buffer[0];
+    const char* bufferPtr = &buffer[1];
+    if (type == RPCType::appendEntries) {
+        AppendEntries appendEntries;
+        appendEntries.deserialize(bufferPtr);
+        if (appendEntries.entries.empty()) {
+            // heartbeat
+            // update time of last heartbeat`
+        }
+        // ...
+    } else if (type == RPCType::appendEntriesResponse) {
+        AppendEntriesResponse appendEntriesResponse;
+        appendEntriesResponse.deserialize(bufferPtr);
+        // ...
+    } else if (type == RPCType::requestVote) {
+        RequestVote requestVote;
+        requestVote.deserialize(bufferPtr);
+        // ...
+    } else if (type == RPCType::requestVoteResponse) {
+        RequestVoteResponse requestVoteResponse;
+        requestVoteResponse.deserialize(bufferPtr);
+        // ...
+    }
+}
+
+void Raft::handleLeaderRPC(const std::string& buffer) {
     unsigned char type = buffer[0];
     const char* bufferPtr = &buffer[1];
     if (type == RPCType::appendEntries) {
