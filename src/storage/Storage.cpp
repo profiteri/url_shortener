@@ -12,15 +12,6 @@ std::string Storage::toBase62(size_t hashValue) {
     return result;
 }
 
-Storage::Storage() {
-    shortToLongFile.open(shortToLongFileName);
-    longToShortFile.open(longToShortFileName);
-}
-
-Storage::~Storage() {
-    shortToLongFile.close();
-    longToShortFile.close();
-}
 
 std::string Storage::getLongUrl(const std::string& shortURL) {
 
@@ -57,11 +48,7 @@ std::string Storage::generateShortUrl(const std::string& longURL) {
     shortHash += std::to_string(longToShort.size());
 
     longToShort[longURL] = shortHash;
-    std::ofstream longToShortFile("/space/longToShort.txt", std::ios::out | std::ios::app);
-    longToShortFile << longURL << ' ' << shortHash << std::endl;
     shortToLong[shortHash] = longURL;
-    std::ofstream shortToLongFile("/space/shortToLong.txt", std::ios::out | std::ios::app);
-    shortToLongFile << shortHash << ' ' << longURL << std::endl;
 
     std::cout << longURL << " -> " << shortHash << " (new entry)" << std::endl;
 

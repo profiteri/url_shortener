@@ -29,6 +29,8 @@ public:
 private:
 
     struct State state;
+    const std::string stateFilename = "/space/state.txt";
+    const std::string logFilename = "/space/log.txt";
     Node node{};
     Storage storage;
 
@@ -40,7 +42,6 @@ private:
     void applyCommand(const Command& command);
     bool compareLogEntries(const LogEntry& first, const LogEntry& second);
     void loadPersistentState();
-
     void dumpStateToFile(const std::vector<struct LogEntry>& newEntries); 
 
 };

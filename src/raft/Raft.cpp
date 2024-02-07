@@ -11,7 +11,7 @@
 
 void Raft::loadPersistentState() {
     size_t logSize;
-    std::ifstream stateFile("/space/state.txt");
+    std::ifstream stateFile(stateFilename);
     if (stateFile.is_open()) {
         stateFile >> state.currentTerm;
         stateFile >> state.votedFor;
@@ -20,7 +20,7 @@ void Raft::loadPersistentState() {
 
         stateFile.close();
     }
-    std::ifstream logFile("/space/log.txt");
+    std::ifstream logFile(logFilename);
     if (logFile.is_open()) {
         for (size_t i = 0; i < logSize; ++i) {
             LogEntry entry;
@@ -39,7 +39,7 @@ void Raft::loadPersistentState() {
 }
 
 void Raft::dumpStateToFile(const std::vector<struct LogEntry>& newEntries) {
-    std::ofstream stateFile("/space/state.txt");
+    std::ofstream stateFile(stateFilename);
 
     if (stateFile.is_open()) {
         // Write the state information
@@ -53,7 +53,7 @@ void Raft::dumpStateToFile(const std::vector<struct LogEntry>& newEntries) {
         stateFile.close();
     }
 
-    std::ofstream logFile("/space/log.txt", std::ios::out | std::ios::app);
+    std::ofstream logFile(logFilename, std::ios::out | std::ios::app);
 
     if (logFile.is_open()) {
         // Write each log entry
@@ -278,5 +278,4 @@ void Raft::run() {
 
 Raft::Raft() {
     loadPersistentState();
-    // do something on initilization
 }
