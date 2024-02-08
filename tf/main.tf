@@ -63,7 +63,7 @@ resource "azurerm_public_ip" "my_public_ip" {
 
 # Create Network Interface
 resource "azurerm_network_interface" "my_nic" {
-  count               = 2
+  count               = 3
   name                = "${var.network_interface_name}${count.index}"
   location            = var.resource_group_location
   resource_group_name = var.resource_group_name
@@ -78,7 +78,7 @@ resource "azurerm_network_interface" "my_nic" {
 
 # Associate Network Interface to the Backend Pool of the Load Balancer
 resource "azurerm_network_interface_backend_address_pool_association" "my_nic_lb_pool" {
-  count                   = 2
+  count                   = 3
   network_interface_id    = azurerm_network_interface.my_nic[count.index].id
   ip_configuration_name   = "ipconfig${count.index}"
   backend_address_pool_id = azurerm_lb_backend_address_pool.my_lb_pool.id
@@ -86,7 +86,7 @@ resource "azurerm_network_interface_backend_address_pool_association" "my_nic_lb
 
 # Create Virtual Machine
 resource "azurerm_linux_virtual_machine" "my_vm" {
-  count                 = 2
+  count                 = 3
   name                  = "${var.virtual_machine_name}${count.index}"
   location              = var.resource_group_location
   resource_group_name   = var.resource_group_name
@@ -114,7 +114,7 @@ resource "azurerm_linux_virtual_machine" "my_vm" {
 
 # Enable virtual machine extension and install Nginx
 resource "azurerm_virtual_machine_extension" "my_vm_extension" {
-  count                = 2
+  count                = 3
   name                 = "Nginx"
   virtual_machine_id   = azurerm_linux_virtual_machine.my_vm[count.index].id
   publisher            = "Microsoft.Azure.Extensions"
@@ -123,7 +123,7 @@ resource "azurerm_virtual_machine_extension" "my_vm_extension" {
 
   settings = <<SETTINGS
 {
- "commandToExecute": "sudo apt-get update && sudo apt-get install nginx -y && echo \"Hello World from $(hostname)\" > /var/www/html/index.html && sudo systemctl restart nginx"
+ "commandToExecute": "sudo apt-get update"
 }
 SETTINGS
 
@@ -187,6 +187,16 @@ resource "azurerm_lb_nat_rule" "my_nat_rule_vm2" {
   frontend_ip_configuration_name = var.public_ip_name
 }
 
+resource "azurerm_lb_nat_rule" "my_nat_rule_vm3" {
+  resource_group_name            = var.resource_group_name
+  loadbalancer_id                = azurerm_lb.my_lb.id
+  name                           = "test-ssh-vm3"
+  protocol                       = "Tcp"
+  frontend_port                  = 223
+  backend_port                   = 22
+  frontend_ip_configuration_name = var.public_ip_name
+}
+
 # Associate LB NAT Rule and VM Network Interface
 resource "azurerm_network_interface_nat_rule_association" "my_web_nic_nat_rule_associate_vm1" {
   network_interface_id  = azurerm_network_interface.my_nic[0].id
@@ -199,6 +209,13 @@ resource "azurerm_network_interface_nat_rule_association" "my_web_nic_nat_rule_a
   network_interface_id  = azurerm_network_interface.my_nic[1].id
   ip_configuration_name = azurerm_network_interface.my_nic[1].ip_configuration[0].name
   nat_rule_id           = azurerm_lb_nat_rule.my_nat_rule_vm2.id
+}
+
+# Associate LB NAT Rule and VM Network Interface
+resource "azurerm_network_interface_nat_rule_association" "my_web_nic_nat_rule_associate_vm3" {
+  network_interface_id  = azurerm_network_interface.my_nic[2].id
+  ip_configuration_name = azurerm_network_interface.my_nic[2].ip_configuration[0].name
+  nat_rule_id           = azurerm_lb_nat_rule.my_nat_rule_vm3.id
 }
 
 resource "azurerm_lb_outbound_rule" "my_lboutbound_rule" {

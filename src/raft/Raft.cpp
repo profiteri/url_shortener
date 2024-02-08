@@ -244,21 +244,23 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
                 commitStateToFile();
                 return;
             }
-            auto& pendingNodes = pendingWrite.value().pendingNodes;
-            if (ae_resp.success()) {
-                if (pendingNodes.find(from) != pendingNodes.end()) {
-                    pendingNodes.erase(from);
-                    ++nextIndices[from];
-                    if (node.numNodes - static_cast<int>(pendingNodes.size()) > node.numNodes / 2) {
-                        commitLogsToFile(prevCommitIndex, prevCommitIndex + 1);
-                        commitStateToFile();
-                        commitToStorage(prevCommitIndex, prevCommitIndex + 1);
-                        prevCommitIndex++;
-                        pendingWrite = std::nullopt;
+            if (pendingWrite.has_value()) {
+                auto& pendingNodes = pendingWrite.value().pendingNodes;
+                if (ae_resp.success()) {
+                    if (pendingNodes.find(from) != pendingNodes.end()) {
+                        pendingNodes.erase(from);
+                        ++nextIndices[from];
+                        if (node.numNodes - static_cast<int>(pendingNodes.size()) > node.numNodes / 2) {
+                            commitLogsToFile(prevCommitIndex, prevCommitIndex + 1);
+                            commitStateToFile();
+                            commitToStorage(prevCommitIndex, prevCommitIndex + 1);
+                            prevCommitIndex++;
+                            pendingWrite = std::nullopt;
+                        }
                     }
+                } else {
+                    --nextIndices[from];
                 }
-            } else {
-                --nextIndices[from];
             }
         }
     
