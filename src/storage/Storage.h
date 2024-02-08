@@ -18,8 +18,8 @@ class Storage {
 
 public:
 
-    std::string getLongUrl(const std::string& shortUrl);
-    std::string generateShortUrl(const std::string& longUrl);
+    std::string expandShortUrl(const std::string& shortUrl);
+    std::pair<bool, std::string> cutLongUrl(const std::string& longUrl);
     void insertURL(const std::string& longURL, const std::string& shortURL);
 
 };

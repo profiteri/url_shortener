@@ -40,6 +40,8 @@ public:
     std::string currentLeader;
     NodeType nodeType = Follower;
 
+    std::optional<struct Command> pendingWrite = std::nullopt;
+
 private:
 
     struct State state;

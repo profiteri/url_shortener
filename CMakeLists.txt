@@ -7,11 +7,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20 -Wall -Wextra -Werror -fsanitize=address")
 #-Wconversion
 
+find_package(CURL REQUIRED)
+
 #create target
 add_executable(node src/main.cpp)
 
 #add include dirs path
 target_include_directories(node PRIVATE src)
+
+target_link_libraries(node CURL::libcurl)
 
 #link http server library
 find_library(LIB_TO_INCLUDE httpserver /usr/local/lib)
