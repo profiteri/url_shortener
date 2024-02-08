@@ -478,7 +478,9 @@ void Raft::run() {
 
             case NodeType::Follower: {
 
-                std::cout << "Listen to heartbits\n";            
+                std::cout << "*******************\n";
+                std::cout << "Listen to heartbeats\n";
+                std::cout << "*******************\n";
 
                 //setup heartbeats timeout (sec), after which node runs election
                 long timeout = static_cast<long>(distr(gen));
@@ -503,7 +505,9 @@ void Raft::run() {
 
             case NodeType::Candidate: {
 
+                std::cout << "**************\n";
                 std::cout << "Start election\n";
+                std::cout << "**************\n";
 
                 runElection();
 
@@ -527,7 +531,12 @@ void Raft::run() {
             }
 
             case NodeType::Leader: {
-                long timeout = 10;
+
+                std::cout << "**** *******\n";
+                std::cout << "I'm a leader\n";
+                std::cout << "************\n";
+
+                long timeout = 3000;
                 event e = listenToRPCs(timeout);
 
                 switch (e.first) {
