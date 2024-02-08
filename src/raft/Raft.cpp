@@ -535,7 +535,7 @@ void Raft::run() {
                     }
                 }
 
-                if (pendingWrite.has_value()) {
+                if (raft.nodeType == NodeType::Leader && pendingWrite.has_value()) {
                     for (const std::string& pendingNode : pendingWrite.value().pendingNodes) {
                         AppendEntries rpc;
                         rpc.term = state.currentTerm;
