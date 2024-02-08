@@ -46,6 +46,9 @@ void Raft::applyCommand(const Command& command) {
 
 
 bool Raft::compareLogEntries(size_t prevLogIndex, size_t prevLogTerm) {
+    if (prevLogIndex == -1) {
+        return true;
+    }
     if (prevLogIndex >= state.log.size()) {
         return false;
     }
@@ -162,6 +165,7 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
             } else if (requestVoteResponse.term > state.currentTerm) {
                 state.currentTerm = requestVoteResponse.term;
                 nodeType = NodeType::Follower;
+                commitStateToFile();
             }
             break;
         }
@@ -207,6 +211,7 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
             if (state.currentTerm < resp.term) {
                 state.currentTerm = resp.term;
                 nodeType = NodeType::Follower;
+                commitStateToFile();
                 return;
             }
             if (resp.success) {
@@ -321,6 +326,8 @@ void Raft::handleRequestVote(RequestVote rpc, const std::string &from) {
     if (resp.voteGranted) {
         state.votedFor = rpc.candidateId;
     }
+
+    commitStateToFile();
 
     char msg[resp.getDataSize()];
     msg[0] = RPCType::requestVoteResponse;
