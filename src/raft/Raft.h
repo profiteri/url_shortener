@@ -38,7 +38,7 @@ public:
         std::unordered_set<std::string> pendingNodes;
         struct Command command;
 
-        WriteRequest(Raft& raft, const std::string& longURL, const std::string& shortURL) : raft(raft) {
+        WriteRequest(Raft& raft, std::string longURL, std::string shortURL) : raft(raft) {
             for (const auto& pair : raft.nextIndices) {
                 pendingNodes.insert(pair.first);
             }
