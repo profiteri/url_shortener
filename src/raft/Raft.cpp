@@ -537,6 +537,34 @@ void Raft::run() {
                 std::cout << "I'm a leader\n";
                 std::cout << "************\n";
 
+                int logSize = static_cast<int>(state.log.size());
+                for (const auto& pair : nextIndices) {
+                    ProtoAppendEntries rpc;
+                    rpc.set_term(state.currentTerm);
+                    rpc.set_leaderid(node.id);
+                    rpc.set_commitindex(prevCommitIndex);
+                    if (logSize > 1) {
+                        rpc.set_prevlogindex(state.log[logSize - 2].index);
+                        rpc.set_prevlogterm(state.log[logSize - 2].term);
+                    }
+
+                    // if follower is up to date, pair.second >= logSize
+                    for (int i = pair.second; i < logSize; i++) {
+                        LogEntry entry = state.log[i];
+                        Command cmd = entry.command;
+
+                        ProtoLogEntry* proto_entry = rpc.add_entries();
+
+                        ProtoCommand* proto_command = proto_entry->mutable_command();
+                        proto_command->set_longurl(cmd.longURL);
+                        proto_command->set_shorturl(cmd.shortURL);
+
+                        proto_entry->set_term(entry.term);
+                        proto_entry->set_index(entry.index);
+                    }
+                        sendRPC(packToAny(rpc).data(), pair.first);
+                }
+
                 long timeout = 3000;
                 event e = listenToRPCs(timeout);
 
@@ -551,37 +579,6 @@ void Raft::run() {
                         std::cout << "Got msg: " << p.first << '\n';
                         handleLeaderRPC(p.first, p.second);
                         break;
-                    }
-                }
-
-                if (nodeType == NodeType::Leader && pendingWrite.has_value()) {
-                    int logSize = static_cast<int>(state.log.size());
-                    for (const auto& pair : nextIndices) {
-                        if (pair.second >= logSize) {
-                            continue;
-                        }
-                        ProtoAppendEntries rpc;
-                        rpc.set_term(state.currentTerm);
-                        rpc.set_leaderid(node.id);
-                        rpc.set_commitindex(prevCommitIndex);
-                        if (logSize > 1) {
-                            rpc.set_prevlogindex(state.log[logSize - 2].index);
-                            rpc.set_prevlogterm(state.log[logSize - 2].term);
-                        }
-                        for (int i = pair.second; i < logSize; i++) {
-                            LogEntry entry = state.log[i];
-                            Command cmd = entry.command;
-
-                            ProtoLogEntry* proto_entry = rpc.add_entries();
-
-                            ProtoCommand* proto_command = proto_entry->mutable_command();
-                            proto_command->set_longurl(cmd.longURL);
-                            proto_command->set_shorturl(cmd.shortURL);
-
-                            proto_entry->set_term(entry.term);
-                            proto_entry->set_index(entry.index);
-                        }
-                        sendRPC(packToAny(rpc).data(), pair.first);
                     }
                 }
             }
