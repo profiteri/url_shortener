@@ -193,6 +193,7 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
                 receivedVotes++;
                 if (receivedVotes > node.numNodes / 2) {
                     nodeType = NodeType::Leader;
+                    updateNextIndices();
                 }
             } else if (rv_resp.term() > state.currentTerm) {
                 state.currentTerm = rv_resp.term();
