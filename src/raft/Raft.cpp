@@ -234,14 +234,18 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
                 commitStateToFile();
                 return;
             }
+            auto& pendingNodes = pendingWrite.value().pendingNodes;
             if (ae_resp.success()) {
-                pendingWrite.value().pendingNodes.erase(from);
-                if (node.numNodes - static_cast<int>(pendingWrite.value().pendingNodes.size()) > node.numNodes / 2) {
-                    commitLogsToFile(prevCommitIndex, prevCommitIndex + 1);
-                    commitStateToFile();
-                    commitToStorage(prevCommitIndex, prevCommitIndex + 1);
-                    prevCommitIndex++;
-                    pendingWrite = std::nullopt;
+                if (pendingNodes.find(from) != pendingNodes.end()) {
+                    pendingNodes.erase(from);
+                    ++nextIndices[from];
+                    if (node.numNodes - static_cast<int>(pendingNodes.size()) > node.numNodes / 2) {
+                        commitLogsToFile(prevCommitIndex, prevCommitIndex + 1);
+                        commitStateToFile();
+                        commitToStorage(prevCommitIndex, prevCommitIndex + 1);
+                        prevCommitIndex++;
+                        pendingWrite = std::nullopt;
+                    }
                 }
             } else {
                 --nextIndices[from];
@@ -531,21 +535,21 @@ void Raft::run() {
                     }
                 }
 
-                if (pendingWrite.has_value()) {
-                    for (const std::string& pendingNode : pendingWrite.value().pendingNodes) {
-
+                if (nodeType == NodeType::Leader && pendingWrite.has_value()) {
+                    int logSize = static_cast<int>(state.log.size());
+                    for (const auto& pair : nextIndices) {
+                        if (pair.second >= logSize) {
+                            continue;
+                        }
                         ProtoAppendEntries rpc;
                         rpc.set_term(state.currentTerm);
                         rpc.set_leaderid(node.id);
                         rpc.set_commitindex(prevCommitIndex);
-
-                        int logSize = state.log.size();
                         if (logSize > 1) {
                             rpc.set_prevlogindex(state.log[logSize - 2].index);
                             rpc.set_prevlogterm(state.log[logSize - 2].term);
                         }
-                        for (int i = nextIndices[pendingNode]; i < static_cast<int>(state.log.size()); i++) {
-
+                        for (int i = pair.second; i < logSize; i++) {
                             LogEntry entry = state.log[i];
                             Command cmd = entry.command;
 
@@ -557,10 +561,8 @@ void Raft::run() {
 
                             proto_entry->set_term(entry.term);
                             proto_entry->set_index(entry.index);
-                            
                         }
-
-                        sendRPC(packToAny(rpc).data(), pendingNode);
+                        sendRPC(packToAny(rpc).data(), pair.first);
                     }
                 }
             }
