@@ -553,8 +553,8 @@ void Raft::run() {
 
                     // if follower is up to date, pair.second >= logSize
                     for (int i = pair.second; i < logSize; i++) {
-                        LogEntry entry = state.log[i];
-                        Command cmd = entry.command;
+                        LogEntry& entry = state.log[i];
+                        Command& cmd = entry.command;
 
                         ProtoLogEntry* proto_entry = rpc.add_entries();
 
