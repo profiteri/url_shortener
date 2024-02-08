@@ -359,6 +359,7 @@ void Raft::sendRPC(char* data, const std::string& to) {
         std::cout << "Sent successful\n";
     } else {
         std::cout << "Error sending msg\n";
+        std::cout << std::strerror(errno) << "Error sending msg\n";
     }
 
 }
