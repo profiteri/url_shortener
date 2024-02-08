@@ -1,4 +1,7 @@
 #include "Raft.h"
+#include "requests.pb.h"
+#include "google/protobuf/any.pb.h"
+
 #include <fstream>
 #include <cerrno>
 #include <chrono>
@@ -9,6 +12,15 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <random>
+
+template <typename T>
+static std::string packToAny(T msg) {
+    google::protobuf::Any any;
+    any.PackFrom(msg);
+    std::string data;
+    any.SerializeToString(&data);
+    return data;
+}
 
 void Raft::loadPersistentState() {
     size_t logSize;
@@ -180,15 +192,12 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
 
             //not vote
             if (requestVote.term <= state.currentTerm) {
-                RequestVoteResponse response = {
-                    .term = state.currentTerm,
-                    .voteGranted = false
-                };
-                char msg[response.getDataSize()];
-                msg[0] = RPCType::requestVoteResponse;
-                char* ptr = &msg[1];
-                response.serialize(ptr);
-                sendRPC(msg, from);
+
+                ProtoRequestVoteResponse response;
+                response.set_term(state.currentTerm);
+                response.set_votegranted(false);
+                
+                sendRPC(packToAny(response).data(), from);
                 return;
             }
             nodeType = NodeType::Follower;
@@ -235,17 +244,12 @@ void Raft::handleAppendEntries(AppendEntries rpc, const std::string &from) {
     if (!compareLogEntries(rpc.prevLogIndex, rpc.prevLogTerm)) {
 
         //send fail
-        AppendEntriesResponse resp;
-        resp.term = state.currentTerm;
-        resp.success = false;
-        
-        char msg[resp.getDataSize()];
-        msg[0] = RPCType::appendEntriesResponse;
-        char* ptr = &msg[1];
-        resp.serialize(ptr);
-        sendRPC(msg, from);
-        return;
+        ProtoAppendEntriesResponse resp;
+        resp.set_term(state.currentTerm);
+        resp.set_success(false);
 
+        sendRPC(packToAny(resp).data(), from);
+        return;
     }
 
     //delete & append
@@ -257,17 +261,12 @@ void Raft::handleAppendEntries(AppendEntries rpc, const std::string &from) {
     commitToStorage(prevCommitIndex, rpc.commitIndex);
 
     //send success
-    AppendEntriesResponse resp;
-    resp.term = state.currentTerm;
-    resp.success = true;
+    ProtoAppendEntriesResponse resp;
+    resp.set_term(state.currentTerm);
+    resp.set_success(true);
 
-    char msg[resp.getDataSize()];
-    msg[0] = RPCType::appendEntriesResponse;
-    char* ptr = &msg[1];
-    resp.serialize(ptr);
-    sendRPC(msg, from);
+    sendRPC(packToAny(resp).data(), from);
     return;
-
 }
 
 void Raft::handleRequestVote(RequestVote rpc, const std::string &from) {
@@ -277,20 +276,15 @@ void Raft::handleRequestVote(RequestVote rpc, const std::string &from) {
         state.votedFor = -1;
     }
 
-    RequestVoteResponse resp; 
-    resp.term = state.currentTerm;   
-
-    resp.voteGranted = (
+    ProtoRequestVoteResponse resp; 
+    resp.set_term(state.currentTerm);   
+    resp.set_votegranted(
         (state.votedFor == -1 || state.votedFor == rpc.candidateId)
         &&
         (rpc.lastLogIndex >= state.log.back().index && rpc.lastLogTerm >= state.log.back().term)
     ); 
 
-    char msg[resp.getDataSize()];
-    msg[0] = RPCType::requestVoteResponse;
-    char* ptr = &msg[1];
-    resp.serialize(ptr);
-    sendRPC(msg, from);
+    sendRPC(packToAny(resp).data(), from);
 
 }
 

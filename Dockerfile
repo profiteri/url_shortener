@@ -6,4 +6,5 @@ COPY src src
 COPY CMakeLists.txt .
 
 RUN mkdir build && cd build && cmake .. && make
-ENTRYPOINT ./build/node
+ENTRYPOINT /bin/bash
+#ENTRYPOINT ./build/node

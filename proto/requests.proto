@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+message ProtoRequestVote
+{
+    uint64 term = 1;
+    int32 candidateId = 2;
+    uint64 lastLogIndex = 3;
+    uint64 lastLogTerm = 4;
+}
+
+message ProtoRequestVoteResponse
+{
+    uint64 term = 1;
+    bool voteGranted = 2;
+}
+
+message ProtoCommand
+{
+    string longURL = 1;
+    string shortURL = 2;
+}
+
+message ProtoLogEntry
+{
+    uint64 term = 1;
+    uint64 index = 2;
+    ProtoCommand command = 3;
+}
+
+message ProtoAppendEntries
+{
+    uint64 term = 1;
+    int32 leaderId = 2;
+    uint64 prevLogIndex = 3;
+    uint64 prevLogTerm = 4;
+    uint64 commitIndex = 5;
+    repeated ProtoLogEntry entries = 6;
+}
+
+message ProtoAppendEntriesResponse
+{
+    uint64 term = 1;
+    bool success = 2;
+}
