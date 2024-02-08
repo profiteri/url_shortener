@@ -556,14 +556,25 @@ void Raft::run() {
                         LogEntry& entry = state.log[i];
                         Command& cmd = entry.command;
 
+                        std:: cout << " -   try construct entry\n";
+
                         ProtoLogEntry* proto_entry = rpc.add_entries();
 
+                        std:: cout << " -   allocated for entry\n";
+
                         ProtoCommand* proto_command = proto_entry->mutable_command();
+                        std:: cout << " -   allocated for command\n";
+
+                        std:: cout << " -   long url: "<< cmd.longURL << "\n";
+                        std:: cout << " -   short url: "<< cmd.shortURL << "\n";
+
                         proto_command->set_longurl(cmd.longURL);
                         proto_command->set_shorturl(cmd.shortURL);
+                        std:: cout << " -   set command\n";
 
                         proto_entry->set_term(entry.term);
                         proto_entry->set_index(entry.index);
+                        std:: cout << " -   set resp of entry\n";
                     }
                         sendRPC(packToAny(rpc).data(), pair.first);
                 }
