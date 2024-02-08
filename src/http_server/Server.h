@@ -3,7 +3,8 @@
 #include <httpserver.hpp>
 #include <memory>
 #include <iostream>
-#include <raft/Raft.h>
+#include "raft/Raft.h"
+#include <curl/curl.h>
 
 using namespace httpserver;
 
@@ -36,7 +37,13 @@ public:
 
     Raft& r;
 
-    Server(Raft& raft) : r(raft) {}
+    Server(Raft& raft) : r(raft) {
+        curl_global_init(CURL_GLOBAL_ALL);
+    }
+
+    ~Server() {
+        curl_global_cleanup();
+    }
     void run();
 
 };

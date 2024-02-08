@@ -32,6 +32,22 @@ public:
         std::vector<struct LogEntry> log;
     };
 
+    struct WriteRequest {
+        Raft& raft;
+        std::unordered_set<std::string> pendingNodes;
+        struct Command command;
+
+        WriteRequest(Raft& raft, const std::string& longURL, const std::string& shortURL) : raft(raft) {
+            for (const auto& pair : raft.nextIndices) {
+                pendingNodes.insert(pair.first);
+            }
+            command.longURL = longURL;
+            command.shortURL = shortURL;
+            raft.state.log.emplace_back(raft.state.currentTerm, raft.state.log.size(), command);
+            raft.updateNextIndices();
+        }
+    };
+
     Raft(Node& node, Storage& storage);
     void run();
 
@@ -40,10 +56,14 @@ public:
     std::string currentLeader;
     NodeType nodeType = Follower;
 
+    std::optional<struct WriteRequest> pendingWrite = std::nullopt;
+
+    std::unordered_map<std::string, size_t> nextIndices;
+
 private:
 
     struct State state;
-    size_t prevCommitIndex;
+    size_t prevCommitIndex = -1;
     size_t receivedVotes = 1;
 
     const std::string stateFilename = "/space/state.txt";
@@ -54,12 +74,13 @@ private:
 
     void handleFollowerRPC(const std::string& msg, const std::string& from);
     void handleCandidateRPC(const std::string& msg, const std::string& from);
-    void handleLeaderRPC(const std::string& buffer);
+    void handleLeaderRPC(const std::string& msg, const std::string& from);
 
     void handleAppendEntries(AppendEntries, const std::string& from);
     void handleRequestVote(RequestVote, const std::string& from);
 
     void sendRPC(char* data, const std::string& to);
+    void updateNextIndices();
     void runElection();
     event listenToRPCs(long timeout);
 

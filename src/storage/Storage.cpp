@@ -13,7 +13,7 @@ std::string Storage::toBase62(size_t hashValue) {
 }
 
 
-std::string Storage::getLongUrl(const std::string& shortURL) {
+std::string Storage::expandShortUrl(const std::string& shortURL) {
 
     const std::lock_guard lock(mutex);
 
@@ -27,7 +27,7 @@ std::string Storage::getLongUrl(const std::string& shortURL) {
     return "";
 }
 
-std::string Storage::generateShortUrl(const std::string& longURL) {
+std::pair<bool, std::string>  Storage::cutLongUrl(const std::string& longURL) {
 
     const std::lock_guard lock(mutex);
 
@@ -35,7 +35,7 @@ std::string Storage::generateShortUrl(const std::string& longURL) {
     auto it = longToShort.find(longURL);
     if (it != longToShort.end()) {
         std::cout << longURL << " -> " << it->second << " (existing entry)" << std::endl;
-        return it->second;
+        return std::make_pair(false, it->second);
     }
     // Use a hash function to generate a hash value
     std::hash<std::string> hasher;
@@ -52,7 +52,7 @@ std::string Storage::generateShortUrl(const std::string& longURL) {
 
     std::cout << longURL << " -> " << shortHash << " (new entry)" << std::endl;
 
-    return shortHash;
+    return std::make_pair(true, shortHash);
 }
 
 void Storage::insertURL(const std::string& longURL, const std::string& shortURL) {

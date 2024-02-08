@@ -31,9 +31,9 @@ public:
 
     size_t term;
     int leaderId;
-    size_t prevLogIndex;
-    size_t prevLogTerm;
-    size_t commitIndex;
+    size_t prevLogIndex = -1;
+    size_t prevLogTerm = -1;
+    size_t commitIndex = -1;
     // have to use vector since it's variable length
     std::vector<struct LogEntry> entries;
 

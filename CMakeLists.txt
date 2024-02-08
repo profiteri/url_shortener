@@ -15,11 +15,15 @@ add_library(pb_lib ${pb_hdr} ${pb_src})
 target_include_directories(pb_lib INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(pb_lib PUBLIC protobuf::libprotobuf)
 
+find_package(CURL REQUIRED)
+
 #create target
 add_executable(node src/main.cpp)
 
 #add include dirs path
 target_include_directories(node PRIVATE src)
+
+target_link_libraries(node CURL::libcurl)
 
 #link http server library
 find_library(LIB_TO_INCLUDE httpserver /usr/local/lib)

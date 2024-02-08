@@ -58,6 +58,9 @@ void Raft::applyCommand(const Command& command) {
 
 
 bool Raft::compareLogEntries(size_t prevLogIndex, size_t prevLogTerm) {
+    if (prevLogIndex == -1) {
+        return true;
+    }
     if (prevLogIndex >= state.log.size()) {
         return false;
     }
@@ -174,6 +177,7 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
             } else if (requestVoteResponse.term > state.currentTerm) {
                 state.currentTerm = requestVoteResponse.term;
                 nodeType = NodeType::Follower;
+                commitStateToFile();
             }
             break;
         }
@@ -206,29 +210,62 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
     }
 }
 
-void Raft::handleLeaderRPC(const std::string& buffer) {
-    unsigned char type = buffer[0];
-    const char* bufferPtr = &buffer[1];
-    if (type == RPCType::appendEntries) {
-        AppendEntries appendEntries;
-        appendEntries.deserialize(bufferPtr);
-        if (appendEntries.entries.empty()) {
-            // heartbeat
-            // update time of last heartbeat`
+void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
+    unsigned char type = msg[0];
+    const char* bufferPtr = &msg[1];
+    switch (type) {
+        case RPCType::appendEntriesResponse: {
+            AppendEntriesResponse resp;
+            resp.deserialize(bufferPtr);
+            if (state.currentTerm < resp.term) {
+                state.currentTerm = resp.term;
+                nodeType = NodeType::Follower;
+                commitStateToFile();
+                return;
+            }
+            if (resp.success) {
+                pendingWrite.value().pendingNodes.erase(from);
+                if (node.numNodes - pendingWrite.value().pendingNodes.size() > node.numNodes / 2) {
+                    commitLogsToFile(prevCommitIndex, prevCommitIndex + 1);
+                    commitStateToFile();
+                    commitToStorage(prevCommitIndex, prevCommitIndex + 1);
+                    prevCommitIndex++;
+                    pendingWrite = std::nullopt;
+                }
+            } else {
+                --nextIndices[from];
+            }
+            break;
         }
-        // ...
-    } else if (type == RPCType::appendEntriesResponse) {
-        AppendEntriesResponse appendEntriesResponse;
-        appendEntriesResponse.deserialize(bufferPtr);
-        // ...
-    } else if (type == RPCType::requestVote) {
-        RequestVote requestVote;
-        requestVote.deserialize(bufferPtr);
-        // ...
-    } else if (type == RPCType::requestVoteResponse) {
-        RequestVoteResponse requestVoteResponse;
-        requestVoteResponse.deserialize(bufferPtr);
-        // ...
+    
+        case RPCType::appendEntries: {
+            AppendEntries rpc;
+            rpc.deserialize(bufferPtr);
+            nodeType = NodeType::Follower;
+            handleAppendEntries(rpc, from);
+            break;
+        }
+
+        case RPCType::requestVote: {
+            RequestVote rpc;
+            rpc.deserialize(bufferPtr);
+
+            //not vote
+            if (rpc.term <= state.currentTerm) {
+                RequestVoteResponse response = {
+                    .term = state.currentTerm,
+                    .voteGranted = false
+                };
+                char msg[response.getDataSize()];
+                msg[0] = RPCType::requestVoteResponse;
+                char* ptr = &msg[1];
+                response.serialize(ptr);
+                sendRPC(msg, from);
+                return;
+            }
+            nodeType = NodeType::Follower;
+            handleRequestVote(rpc, from);
+        }
     }
 }
 
@@ -282,7 +319,13 @@ void Raft::handleRequestVote(RequestVote rpc, const std::string &from) {
         (state.votedFor == -1 || state.votedFor == rpc.candidateId)
         &&
         (rpc.lastLogIndex >= state.log.back().index && rpc.lastLogTerm >= state.log.back().term)
-    ); 
+    );
+
+    if (resp.voteGranted) {
+        state.votedFor = rpc.candidateId;
+    }
+
+    commitStateToFile();
 
     sendRPC(packToAny(resp).data(), from);
 
@@ -475,12 +518,55 @@ void Raft::run() {
             }
 
             case NodeType::Leader: {
-                
-                std::cout << "IM LEADER MOTHERFUCKERS\n"; 
+                long timeout = 10;
+                event e = listenToRPCs(timeout);
 
+                switch (e.first) {
+
+                    case EventType::timeout: {
+                        break;
+                    }
+
+                    case EventType::message: {
+                        auto p = e.second.value();
+                        std::cout << "Got msg: " << p.first << '\n';
+                        handleLeaderRPC(p.first, p.second);
+                        break;
+                    }
+                }
+
+                if (pendingWrite.has_value()) {
+                    for (const std::string& pendingNode : pendingWrite.value().pendingNodes) {
+                        AppendEntries rpc;
+                        rpc.term = state.currentTerm;
+                        rpc.leaderId = node.id;
+                        rpc.commitIndex = prevCommitIndex;
+                        size_t logSize = state.log.size();
+                        if (logSize > 1) {
+                            rpc.prevLogIndex = state.log[logSize - 2].index;
+                            rpc.prevLogTerm = state.log[logSize - 2].term;
+                        }
+                        for (size_t i = nextIndices[pendingNode]; i < state.log.size(); i++) {
+                            rpc.entries.push_back(state.log[i]);
+                        }
+                        char msg[rpc.getDataSize()];
+                        msg[0] = RPCType::appendEntries;
+                        char* ptr = &msg[1];
+                        rpc.serialize(ptr);
+                        sendRPC(msg, pendingNode);
+                    }
+                }
             }
 
         }
+    }
+}
+
+
+void Raft::updateNextIndices() {
+    size_t lastLogIndex = state.log.size();
+    for (const std::string& nodeAddress : node.nodeAddresses) {
+        nextIndices[nodeAddress] = lastLogIndex;
     }
 }
 
