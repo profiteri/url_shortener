@@ -223,14 +223,18 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
                 commitStateToFile();
                 return;
             }
+            auto& pendingNodes = pendingWrite.value().pendingNodes;
             if (resp.success) {
-                pendingWrite.value().pendingNodes.erase(from);
-                if (node.numNodes - pendingWrite.value().pendingNodes.size() > node.numNodes / 2) {
-                    commitLogsToFile(prevCommitIndex, prevCommitIndex + 1);
-                    commitStateToFile();
-                    commitToStorage(prevCommitIndex, prevCommitIndex + 1);
-                    prevCommitIndex++;
-                    pendingWrite = std::nullopt;
+                if (pendingNodes.find(from) != pendingNodes.end()) {
+                    pendingNodes.erase(from);
+                    ++nextIndices[from];
+                    if (node.numNodes - pendingNodes.size() > node.numNodes / 2) {
+                        commitLogsToFile(prevCommitIndex, prevCommitIndex + 1);
+                        commitStateToFile();
+                        commitToStorage(prevCommitIndex, prevCommitIndex + 1);
+                        prevCommitIndex++;
+                        pendingWrite = std::nullopt;
+                    }
                 }
             } else {
                 --nextIndices[from];
@@ -536,24 +540,27 @@ void Raft::run() {
                 }
 
                 if (raft.nodeType == NodeType::Leader && pendingWrite.has_value()) {
-                    for (const std::string& pendingNode : pendingWrite.value().pendingNodes) {
+                    size_t logSize = state.log.size();
+                    for (const auto& pair : nextIndices) {
+                        if (pair.second >= logSize) {
+                            continue;
+                        }
                         AppendEntries rpc;
                         rpc.term = state.currentTerm;
                         rpc.leaderId = node.id;
                         rpc.commitIndex = prevCommitIndex;
-                        size_t logSize = state.log.size();
                         if (logSize > 1) {
                             rpc.prevLogIndex = state.log[logSize - 2].index;
                             rpc.prevLogTerm = state.log[logSize - 2].term;
                         }
-                        for (size_t i = nextIndices[pendingNode]; i < state.log.size(); i++) {
+                        for (size_t i = pair.second; i < state.log.size(); i++) {
                             rpc.entries.push_back(state.log[i]);
                         }
                         char msg[rpc.getDataSize()];
                         msg[0] = RPCType::appendEntries;
                         char* ptr = &msg[1];
                         rpc.serialize(ptr);
-                        sendRPC(msg, pendingNode);
+                        sendRPC(msg, pair.first);
                     }
                 }
             }

@@ -43,8 +43,8 @@ public:
             }
             command.longURL = longURL;
             command.shortURL = shortURL;
-            raft.state.log.emplace_back(raft.state.currentTerm, raft.state.log.size(), command);
             raft.updateNextIndices();
+            raft.state.log.emplace_back(raft.state.currentTerm, raft.state.log.size(), command);
         }
     };
 
