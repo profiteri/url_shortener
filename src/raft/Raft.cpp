@@ -16,6 +16,9 @@ template <typename T>
 static std::string packToAny(T msg) {
     google::protobuf::Any any;
     any.PackFrom(msg);
+
+    std::cout << "  -   serialized: " << any.DebugString() << "\n";
+
     std::string data;
     any.SerializeToString(&data);
     return data;
@@ -148,6 +151,8 @@ void Raft::handleFollowerRPC(const std::string& msg, const std::string& from) {
     google::protobuf::Any any;
     any.ParseFromString(msg); 
 
+    std::cout << "  -   deserialized: " << any.DebugString() << "\n";
+
     if (any.UnpackTo(&ae)) {
 
         handleAppendEntries(ae, from);
@@ -179,6 +184,8 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
 
     google::protobuf::Any any;
     any.ParseFromString(msg);
+
+    std::cout << "  -   deserialized: " << any.DebugString() << "\n";
 
     if (any.UnpackTo(&rv_resp))
         {    
@@ -225,6 +232,8 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
 
     google::protobuf::Any any;
     any.ParseFromString(msg);
+
+    std::cout << "  -   deserialized: " << any.DebugString() << "\n";
 
     if (any.UnpackTo(&ae_resp))
         {            
@@ -322,7 +331,7 @@ void Raft::handleRequestVote(ProtoRequestVote rpc, const std::string &from) {
     resp.set_votegranted(
         (state.votedFor == -1 || state.votedFor == rpc.candidateid())
         &&
-        (rpc.lastlogindex() >= state.log.back().index && rpc.lastlogterm() >= state.log.back().term)
+        (rpc.lastlogindex() >= (!state.log.empty() ? state.log.back().index : -1) && rpc.lastlogterm() >= (!state.log.empty() ? state.log.back().term : -1))
     );
 
     if (resp.votegranted()) {
@@ -484,7 +493,7 @@ void Raft::run() {
 
                     case EventType::message: {
                         auto p = e.second.value();
-                        std::cout << "Got msg: " << p.first << '\n';
+                        std::cout << "  -   got msg as follower" << '\n';
                         handleFollowerRPC(p.first, p.second);
                         break;
                     }
@@ -509,7 +518,7 @@ void Raft::run() {
 
                     case EventType::message: {
                         auto p = e.second.value();
-                        std::cout << "Got msg: " << p.first << '\n';
+                        std::cout << "  -   got msg as candidate" << '\n';
                         handleCandidateRPC(p.first, p.second);
                         break;
                     }
