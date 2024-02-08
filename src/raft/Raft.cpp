@@ -491,6 +491,6 @@ void Raft::run() {
 }
 
 
-Raft::Raft() {
+Raft::Raft(Node& node, Storage& storage) : node(node), storage(storage) {
     loadPersistentState();
 }

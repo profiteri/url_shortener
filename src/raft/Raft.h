@@ -3,6 +3,8 @@
 #include <vector>
 #include <string>
 #include <optional>
+#include <cstring>
+#include <cerrno>
 #include "node/Node.h"
 #include "RPC.h"
 #include "storage/Storage.h"
@@ -30,21 +32,22 @@ public:
         std::vector<struct LogEntry> log;
     };
 
-    Raft();
+    Raft(Node& node, Storage& storage);
     void run();
+
+    Node& node;
+    Storage& storage;
+    std::string currentLeader;
+    NodeType nodeType = Follower;
 
 private:
 
     struct State state;
-    std::string currentLeader;
-    NodeType nodeType = Follower;
     size_t prevCommitIndex;
     size_t receivedVotes = 1;
 
     const std::string stateFilename = "/space/state.txt";
     const std::string logFilename = "/space/log.txt";
-    Node node{};
-    Storage storage;
 
     
     int receiveRPC(int socket, char* buffer);
