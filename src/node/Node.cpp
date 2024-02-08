@@ -139,6 +139,8 @@ Node::Node() {
 
     numNodes = nodeAddresses.size();
 
+    nodeAddresses.erase(localIpAddress);
+
     // use 4343 for commmunication between nodes
     setupListeningSocket("4343");
 
