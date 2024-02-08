@@ -1,5 +1,4 @@
 #include "Raft.h"
-#include "requests.pb.h"
 #include "google/protobuf/any.pb.h"
 
 #include <fstream>
@@ -23,7 +22,7 @@ static std::string packToAny(T msg) {
 }
 
 void Raft::loadPersistentState() {
-    size_t logSize;
+    int logSize;
     std::ifstream stateFile(stateFilename);
     if (stateFile.is_open()) {
         stateFile >> state.currentTerm;
@@ -35,7 +34,7 @@ void Raft::loadPersistentState() {
     }
     std::ifstream logFile(logFilename);
     if (logFile.is_open()) {
-        for (size_t i = 0; i < logSize; ++i) {
+        for (int i = 0; i < logSize; ++i) {
             LogEntry entry;
             logFile >> entry.term;
             logFile >> entry.index;
@@ -57,27 +56,44 @@ void Raft::applyCommand(const Command& command) {
 }
 
 
-bool Raft::compareLogEntries(size_t prevLogIndex, size_t prevLogTerm) {
+bool Raft::compareLogEntries(int prevLogIndex, int prevLogTerm) {
     if (prevLogIndex == -1) {
         return true;
     }
-    if (prevLogIndex >= state.log.size()) {
+    if (prevLogIndex >= static_cast<int>(state.log.size())) {
         return false;
     }
     return state.log[prevLogIndex].term == prevLogTerm;
 }
 
 
-void Raft::appendLogs(size_t prevLogIndex, const std::vector<struct LogEntry> &newEntries) {
+void Raft::appendLogs(int prevLogIndex, const ProtoAppendEntries& proto_entries) {
+
+    std::vector<struct LogEntry> newEntries;
+
+    for (const auto& proto_log : proto_entries.entries()) {
+
+        LogEntry log;
+
+        log.term = proto_log.term();
+        log.index = proto_log.index();
+
+        log.command.longURL = proto_log.command().longurl();
+        log.command.shortURL = proto_log.command().shorturl();
+
+        newEntries.push_back(log);
+
+    }
+
     state.log.insert(state.log.begin() + prevLogIndex + 1, newEntries.begin(), newEntries.end());
 }
 
 
-void Raft::commitLogsToFile(size_t prevCommitIndex, size_t commitIndex) {
+void Raft::commitLogsToFile(int prevCommitIndex, int commitIndex) {
     std::ofstream logFile(logFilename, std::ios::out | std::ios::app);
 
     if (logFile.is_open()) {
-        for (size_t i = prevCommitIndex + 1; i <= commitIndex; i++) {
+        for (int i = prevCommitIndex + 1; i <= commitIndex; i++) {
             const struct LogEntry& entry = state.log[i];
             logFile << entry.term << " ";
             logFile << entry.index << " ";
@@ -103,8 +119,8 @@ void Raft::commitStateToFile() {
 }
 
 
-void Raft::commitToStorage(size_t prevCommitIndex, size_t commitIndex) {
-    for (size_t i = prevCommitIndex + 1; i <= commitIndex; i++) {
+void Raft::commitToStorage(int prevCommitIndex, int commitIndex) {
+    for (int i = prevCommitIndex + 1; i <= commitIndex; i++) {
         const struct LogEntry& entry = state.log[i];
         applyCommand(entry.command);
     }
@@ -126,76 +142,68 @@ int Raft::receiveRPC(int socket, char* buffer) {
 
 void Raft::handleFollowerRPC(const std::string& msg, const std::string& from) {
 
-    unsigned char type = msg[0];
-    const char* bufferPtr = &msg[1];
+    ProtoAppendEntries ae;
+    ProtoRequestVote rv;
 
-    if (type == RPCType::appendEntries) {
+    google::protobuf::Any any;
+    any.ParseFromString(msg); 
 
-        AppendEntries rpc;
-        rpc.deserialize(bufferPtr);
+    if (any.UnpackTo(&ae)) {
 
-        handleAppendEntries(rpc, from);
+        handleAppendEntries(ae, from);
 
-    } else if (type == RPCType::requestVote) {
-
-        RequestVote rpc;
-        rpc.deserialize(bufferPtr);
+    } else if (any.UnpackTo(&rv)) {
 
         //not vote
-        if (rpc.term < state.currentTerm) {
+        if (rv.term() < state.currentTerm) {
 
-            RequestVoteResponse response = {
-                .term = state.currentTerm,
-                .voteGranted = false
-            };
-            char msg[response.getDataSize()];
-            msg[0] = RPCType::requestVoteResponse;
-            char* ptr = &msg[1];
-            response.serialize(ptr);
-            sendRPC(msg, from);
+            ProtoRequestVoteResponse response;
+            response.set_term(state.currentTerm);
+            response.set_votegranted(false);
+
+            sendRPC(packToAny(response).data(), from);
             return;            
 
         }
 
-        handleRequestVote(rpc, from);
+        handleRequestVote(rv, from);
 
     } else std::cerr << "Unrecognized type" << "\n";
 }
 
 void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
-    unsigned char type = msg[0];
-    const char* bufferPtr = &msg[1];
-    switch (type) {
-        case RPCType::requestVoteResponse: {
-            RequestVoteResponse requestVoteResponse;
-            requestVoteResponse.deserialize(bufferPtr);
-            if (requestVoteResponse.voteGranted) {
+    
+    ProtoRequestVoteResponse rv_resp;
+    ProtoAppendEntries ae;
+    ProtoRequestVote rv;
+
+    google::protobuf::Any any;
+    any.ParseFromString(msg);
+
+    if (any.UnpackTo(&rv_resp))
+        {    
+            if (rv_resp.votegranted()) {
                 receivedVotes++;
                 if (receivedVotes > node.numNodes / 2) {
                     nodeType = NodeType::Leader;
                 }
-            } else if (requestVoteResponse.term > state.currentTerm) {
-                state.currentTerm = requestVoteResponse.term;
+            } else if (rv_resp.term() > state.currentTerm) {
+                state.currentTerm = rv_resp.term();
                 nodeType = NodeType::Follower;
                 commitStateToFile();
             }
-            break;
         }
     
-        case RPCType::appendEntries: {
-            AppendEntries appendEntries;
-            appendEntries.deserialize(bufferPtr);
+    else if (any.UnpackTo(&ae))
+        {
             nodeType = NodeType::Follower;
-            handleAppendEntries(appendEntries, from);
-            break;
+            handleAppendEntries(ae, from);
         }
 
-        case RPCType::requestVote: {
-            RequestVote requestVote;
-            requestVote.deserialize(bufferPtr);
-
+    else if (any.UnpackTo(&rv))
+        {
             //not vote
-            if (requestVote.term <= state.currentTerm) {
+            if (rv.term() <= state.currentTerm) {
 
                 ProtoRequestVoteResponse response;
                 response.set_term(state.currentTerm);
@@ -205,27 +213,30 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
                 return;
             }
             nodeType = NodeType::Follower;
-            handleRequestVote(requestVote, from);
+            handleRequestVote(rv, from);
         }
-    }
 }
 
 void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
-    unsigned char type = msg[0];
-    const char* bufferPtr = &msg[1];
-    switch (type) {
-        case RPCType::appendEntriesResponse: {
-            AppendEntriesResponse resp;
-            resp.deserialize(bufferPtr);
-            if (state.currentTerm < resp.term) {
-                state.currentTerm = resp.term;
+
+    ProtoAppendEntriesResponse ae_resp;
+    ProtoAppendEntries ae;
+    ProtoRequestVote rv;
+
+    google::protobuf::Any any;
+    any.ParseFromString(msg);
+
+    if (any.UnpackTo(&ae_resp))
+        {            
+            if (state.currentTerm < ae_resp.term()) {
+                state.currentTerm = ae_resp.term();
                 nodeType = NodeType::Follower;
                 commitStateToFile();
                 return;
             }
-            if (resp.success) {
+            if (ae_resp.success()) {
                 pendingWrite.value().pendingNodes.erase(from);
-                if (node.numNodes - pendingWrite.value().pendingNodes.size() > node.numNodes / 2) {
+                if (node.numNodes - static_cast<int>(pendingWrite.value().pendingNodes.size()) > node.numNodes / 2) {
                     commitLogsToFile(prevCommitIndex, prevCommitIndex + 1);
                     commitStateToFile();
                     commitToStorage(prevCommitIndex, prevCommitIndex + 1);
@@ -235,50 +246,39 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
             } else {
                 --nextIndices[from];
             }
-            break;
         }
     
-        case RPCType::appendEntries: {
-            AppendEntries rpc;
-            rpc.deserialize(bufferPtr);
+    if (any.UnpackTo(&ae))
+        {
             nodeType = NodeType::Follower;
-            handleAppendEntries(rpc, from);
-            break;
+            handleAppendEntries(ae, from);
         }
 
-        case RPCType::requestVote: {
-            RequestVote rpc;
-            rpc.deserialize(bufferPtr);
-
+    if (any.UnpackTo(&rv))
+        {
             //not vote
-            if (rpc.term <= state.currentTerm) {
-                RequestVoteResponse response = {
-                    .term = state.currentTerm,
-                    .voteGranted = false
-                };
-                char msg[response.getDataSize()];
-                msg[0] = RPCType::requestVoteResponse;
-                char* ptr = &msg[1];
-                response.serialize(ptr);
-                sendRPC(msg, from);
+            if (rv.term() <= state.currentTerm) {
+                ProtoRequestVoteResponse response;
+                response.set_term(state.currentTerm);
+                response.set_votegranted(false);
+                sendRPC(packToAny(response).data(), from);
                 return;
             }
             nodeType = NodeType::Follower;
-            handleRequestVote(rpc, from);
+            handleRequestVote(rv, from);
         }
-    }
 }
 
-void Raft::handleAppendEntries(AppendEntries rpc, const std::string &from) {
+void Raft::handleAppendEntries(ProtoAppendEntries rpc, const std::string &from) {
 
-    if (rpc.term < state.currentTerm) return;
+    if (rpc.term() < state.currentTerm) return;
 
-    else if (rpc.term > state.currentTerm) {
-        state.currentTerm = rpc.term;
+    else if (rpc.term() > state.currentTerm) {
+        state.currentTerm = rpc.term();
         state.votedFor = -1;
     }
 
-    if (!compareLogEntries(rpc.prevLogIndex, rpc.prevLogTerm)) {
+    if (!compareLogEntries(rpc.prevlogindex(), rpc.prevlogterm())) {
 
         //send fail
         ProtoAppendEntriesResponse resp;
@@ -290,12 +290,12 @@ void Raft::handleAppendEntries(AppendEntries rpc, const std::string &from) {
     }
 
     //delete & append
-    appendLogs(rpc.prevLogIndex, rpc.entries);
+    appendLogs(rpc.prevlogindex(), rpc);
 
     //advance state machine
-    commitLogsToFile(prevCommitIndex, rpc.commitIndex);
+    commitLogsToFile(prevCommitIndex, rpc.commitindex());
     commitStateToFile();
-    commitToStorage(prevCommitIndex, rpc.commitIndex);
+    commitToStorage(prevCommitIndex, rpc.commitindex());
 
     //send success
     ProtoAppendEntriesResponse resp;
@@ -306,23 +306,23 @@ void Raft::handleAppendEntries(AppendEntries rpc, const std::string &from) {
     return;
 }
 
-void Raft::handleRequestVote(RequestVote rpc, const std::string &from) {
+void Raft::handleRequestVote(ProtoRequestVote rpc, const std::string &from) {
 
-    if (rpc.term > state.currentTerm) {
-        state.currentTerm = rpc.term;
+    if (rpc.term() > state.currentTerm) {
+        state.currentTerm = rpc.term();
         state.votedFor = -1;
     }
 
     ProtoRequestVoteResponse resp; 
     resp.set_term(state.currentTerm);   
     resp.set_votegranted(
-        (state.votedFor == -1 || state.votedFor == rpc.candidateId)
+        (state.votedFor == -1 || state.votedFor == rpc.candidateid())
         &&
-        (rpc.lastLogIndex >= state.log.back().index && rpc.lastLogTerm >= state.log.back().term)
+        (rpc.lastlogindex() >= state.log.back().index && rpc.lastlogterm() >= state.log.back().term)
     );
 
-    if (resp.voteGranted) {
-        state.votedFor = rpc.candidateId;
+    if (resp.votegranted()) {
+        state.votedFor = rpc.candidateid();
     }
 
     commitStateToFile();
@@ -354,20 +354,16 @@ void Raft::runElection() {
     receivedVotes = 1;
     state.currentTerm++;
     state.votedFor = node.id;
-    size_t logSize = state.log.size();
+    int logSize = state.log.size();
 
-    RequestVote requestVote = {
-        .candidateId = node.id,
-        .term = state.currentTerm,
-        .lastLogIndex = logSize ? state.log.back().index : 0,
-        .lastLogTerm = logSize ? state.log.back().term : 0
-    };
+    ProtoRequestVote requestVote;
+    requestVote.set_term(state.currentTerm);
+    requestVote.set_candidateid(node.id);
+    requestVote.set_lastlogindex(logSize ? state.log.back().index : -1);
+    requestVote.set_lastlogterm(logSize ? state.log.back().term : -1);
+
     for (const std::string& nodeAddress : node.nodeAddresses) {
-        char msg[requestVote.getDataSize()];
-        msg[0] = RPCType::appendEntriesResponse;
-        char* ptr = &msg[1];
-        requestVote.serialize(ptr);
-        sendRPC(msg, nodeAddress);        
+        sendRPC(packToAny(requestVote).data(), nodeAddress);        
     }
 }
 
@@ -537,23 +533,34 @@ void Raft::run() {
 
                 if (pendingWrite.has_value()) {
                     for (const std::string& pendingNode : pendingWrite.value().pendingNodes) {
-                        AppendEntries rpc;
-                        rpc.term = state.currentTerm;
-                        rpc.leaderId = node.id;
-                        rpc.commitIndex = prevCommitIndex;
-                        size_t logSize = state.log.size();
+
+                        ProtoAppendEntries rpc;
+                        rpc.set_term(state.currentTerm);
+                        rpc.set_leaderid(node.id);
+                        rpc.set_commitindex(prevCommitIndex);
+
+                        int logSize = state.log.size();
                         if (logSize > 1) {
-                            rpc.prevLogIndex = state.log[logSize - 2].index;
-                            rpc.prevLogTerm = state.log[logSize - 2].term;
+                            rpc.set_prevlogindex(state.log[logSize - 2].index);
+                            rpc.set_prevlogterm(state.log[logSize - 2].term);
                         }
-                        for (size_t i = nextIndices[pendingNode]; i < state.log.size(); i++) {
-                            rpc.entries.push_back(state.log[i]);
+                        for (int i = nextIndices[pendingNode]; i < static_cast<int>(state.log.size()); i++) {
+
+                            LogEntry entry = state.log[i];
+                            Command cmd = entry.command;
+
+                            ProtoLogEntry* proto_entry = rpc.add_entries();
+
+                            ProtoCommand* proto_command = proto_entry->mutable_command();
+                            proto_command->set_longurl(cmd.longURL);
+                            proto_command->set_shorturl(cmd.shortURL);
+
+                            proto_entry->set_term(entry.term);
+                            proto_entry->set_index(entry.index);
+                            
                         }
-                        char msg[rpc.getDataSize()];
-                        msg[0] = RPCType::appendEntries;
-                        char* ptr = &msg[1];
-                        rpc.serialize(ptr);
-                        sendRPC(msg, pendingNode);
+
+                        sendRPC(packToAny(rpc).data(), pendingNode);
                     }
                 }
             }
@@ -564,7 +571,7 @@ void Raft::run() {
 
 
 void Raft::updateNextIndices() {
-    size_t lastLogIndex = state.log.size();
+    int lastLogIndex = state.log.size();
     for (const std::string& nodeAddress : node.nodeAddresses) {
         nextIndices[nodeAddress] = lastLogIndex;
     }

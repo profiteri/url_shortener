@@ -1,1 +1,1 @@
-target_sources(node PRIVATE Raft.cpp RPC.cpp)
+target_sources(node PRIVATE Raft.cpp)

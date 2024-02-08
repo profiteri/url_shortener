@@ -8,6 +8,7 @@
 #include "node/Node.h"
 #include "RPC.h"
 #include "storage/Storage.h"
+#include "requests.pb.h"
 
 enum EventType { message, timeout };
 
@@ -27,7 +28,7 @@ public:
     };
 
     struct State {
-        size_t currentTerm = 0;
+        int currentTerm = 0;
         int votedFor = -1;
         std::vector<struct LogEntry> log;
     };
@@ -58,13 +59,13 @@ public:
 
     std::optional<struct WriteRequest> pendingWrite = std::nullopt;
 
-    std::unordered_map<std::string, size_t> nextIndices;
+    std::unordered_map<std::string, int> nextIndices;
 
 private:
 
     struct State state;
-    size_t prevCommitIndex = -1;
-    size_t receivedVotes = 1;
+    int prevCommitIndex = -1;
+    int receivedVotes = 1;
 
     const std::string stateFilename = "/space/state.txt";
     const std::string logFilename = "/space/log.txt";
@@ -76,8 +77,8 @@ private:
     void handleCandidateRPC(const std::string& msg, const std::string& from);
     void handleLeaderRPC(const std::string& msg, const std::string& from);
 
-    void handleAppendEntries(AppendEntries, const std::string& from);
-    void handleRequestVote(RequestVote, const std::string& from);
+    void handleAppendEntries(ProtoAppendEntries, const std::string& from);
+    void handleRequestVote(ProtoRequestVote, const std::string& from);
 
     void sendRPC(char* data, const std::string& to);
     void updateNextIndices();
@@ -87,13 +88,13 @@ private:
     void loadPersistentState();
     void applyCommand(const Command& command);
 
-    bool compareLogEntries(size_t prevLogIndex, size_t prevLogTerm);
+    bool compareLogEntries(int prevLogIndex, int prevLogTerm);
 
-    void appendLogs(size_t prevLogIndex, const std::vector<struct LogEntry>& newEntries);
+    void appendLogs(int prevLogIndex, const ProtoAppendEntries& newEntries);
 
-    void commitLogsToFile(size_t prevCommitIndex, size_t commitIndex);
+    void commitLogsToFile(int prevCommitIndex, int commitIndex);
     void commitStateToFile();
 
-    void commitToStorage(size_t prevCommitIndex, size_t commitIndex);
+    void commitToStorage(int prevCommitIndex, int commitIndex);
 
 };

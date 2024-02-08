@@ -23,7 +23,7 @@ add_executable(node src/main.cpp)
 #add include dirs path
 target_include_directories(node PRIVATE src)
 
-target_link_libraries(node CURL::libcurl)
+target_link_libraries(node PRIVATE CURL::libcurl)
 
 #link http server library
 find_library(LIB_TO_INCLUDE httpserver /usr/local/lib)
