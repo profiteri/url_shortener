@@ -5,6 +5,7 @@
 #include <optional>
 #include <cstring>
 #include <cerrno>
+#include <condition_variable>
 #include "node/Node.h"
 #include "RPC.h"
 #include "storage/Storage.h"
@@ -33,22 +34,6 @@ public:
         std::vector<struct LogEntry> log;
     };
 
-    struct WriteRequest {
-        Raft& raft;
-        std::unordered_set<std::string> pendingNodes;
-        struct Command command;
-
-        WriteRequest(Raft& raft, std::string longURL, std::string shortURL) : raft(raft) {
-            for (const auto& pair : raft.nextIndices) {
-                pendingNodes.insert(pair.first);
-            }
-            command.longURL = longURL;
-            command.shortURL = shortURL;
-            raft.updateNextIndices();
-            raft.state.log.emplace_back(raft.state.currentTerm, raft.state.log.size(), command);
-        }
-    };
-
     Raft(Node& node, Storage& storage);
     void run();
 
@@ -57,9 +42,22 @@ public:
     std::string currentLeader;
     NodeType nodeType = Follower;
 
-    std::optional<struct WriteRequest> pendingWrite = std::nullopt;
+    std::optional<std::pair<std::string, std::string>> pendingWrite = std::nullopt;
+    bool entryIsAppended = false;
+    std::unordered_set<std::string> pendingNodes;
+
+    mutable std::mutex mutex;
+    mutable std::condition_variable cv;
 
     std::unordered_map<std::string, int> nextIndices;
+
+    void createRequest(std::string longURL, std::string shortURL);
+
+    std::optional<std::pair<std::string, std::string>> getPendingWrite() const;
+
+    void resetPendingWrite();
+
+    void waitForPendingWrite();
 
 private:
 
@@ -81,7 +79,7 @@ private:
     void handleRequestVote(ProtoRequestVote, const std::string& from);
 
     void sendRPC(char* data, const std::string& to);
-    void updateNextIndices();
+    void initNextIndices();
     void runElection();
     event listenToRPCs(long timeout);
 

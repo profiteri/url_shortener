@@ -193,7 +193,7 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
                 receivedVotes++;
                 if (receivedVotes > node.numNodes / 2) {
                     nodeType = NodeType::Leader;
-                    updateNextIndices();
+                    initNextIndices();
                 }
             } else if (rv_resp.term() > state.currentTerm) {
                 state.currentTerm = rv_resp.term();
@@ -244,8 +244,7 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
                 commitStateToFile();
                 return;
             }
-            if (pendingWrite.has_value()) {
-                auto& pendingNodes = pendingWrite.value().pendingNodes;
+            if (getPendingWrite().has_value()) {
                 if (ae_resp.success()) {
                     if (pendingNodes.find(from) != pendingNodes.end()) {
                         pendingNodes.erase(from);
@@ -255,7 +254,7 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
                             commitStateToFile();
                             commitToStorage(prevCommitIndex, prevCommitIndex + 1);
                             prevCommitIndex++;
-                            pendingWrite = std::nullopt;
+                            resetPendingWrite();
                         }
                     }
                 } else {
@@ -540,6 +539,18 @@ void Raft::run() {
                 std::cout << "I'm a leader\n";
                 std::cout << "************\n";
 
+                auto pw = getPendingWrite();
+                if (pw.has_value() && !entryIsAppended) {
+                    Command command(pw.value().first, pw.value().second);
+                    LogEntry entry(state.currentTerm, state.log.size(), command);
+                    state.log.push_back(entry);
+                    pendingNodes.clear();
+                    for (const auto& pair : nextIndices) {
+                        pendingNodes.insert(pair.first);
+                    }
+                    entryIsAppended = true;
+                }
+
                 int logSize = static_cast<int>(state.log.size());
                 for (const auto& pair : nextIndices) {
                     ProtoAppendEntries rpc;
@@ -591,7 +602,38 @@ void Raft::run() {
 }
 
 
-void Raft::updateNextIndices() {
+void Raft::createRequest(std::string longURL, std::string shortURL) {
+    {
+        // Lock the mutex
+        std::unique_lock<std::mutex> lock(mutex);
+
+        // Set the value in pendingWrite
+        pendingWrite.emplace(longURL, shortURL);
+
+        // Notify waiting thread
+        cv.notify_one();
+    } // Unlock the mutex
+}
+
+std::optional<std::pair<std::string, std::string>> Raft::getPendingWrite() const {
+    std::lock_guard<std::mutex> lock(mutex);
+    return pendingWrite;
+}
+
+void Raft::resetPendingWrite() {
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        pendingWrite.reset();
+    } // Unlock the mutex
+    cv.notify_one(); // Notify waiting thread
+}
+
+void Raft::waitForPendingWrite() {
+    std::unique_lock<std::mutex> lock(mutex);
+    cv.wait(lock, [this]() { return !pendingWrite.has_value(); });
+}
+
+void Raft::initNextIndices() {
     int lastLogIndex = state.log.size();
     for (const std::string& nodeAddress : node.nodeAddresses) {
         nextIndices[nodeAddress] = lastLogIndex;
