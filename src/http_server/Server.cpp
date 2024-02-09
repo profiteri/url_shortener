@@ -49,10 +49,10 @@ std::shared_ptr<http_response> Server::cut_url_resource::render(const http_reque
         std::pair<bool, std::string> res = raft.storage.cutLongUrl(longURL);
         std::string shortURL = res.second;
         if (res.first) {
-            if (raft.makeWriteRequest(longURL, res.second)) return std::shared_ptr<http_response>(new string_response(shortURL));
+            if (raft.makeWriteRequest(longURL, res.second)) return std::shared_ptr<http_response>(new string_response(_expand_request_path + "?" + _expand_full_url_key + "=" + shortURL));
             else return std::shared_ptr<http_response>(new string_response(""));
         }
-        return std::shared_ptr<http_response>(new string_response(shortURL));
+        return std::shared_ptr<http_response>(new string_response(_expand_request_path + "?" + _expand_full_url_key + "=" + shortURL));
     } else {
         // forward
         std::string resp = forwardToLeader(raft.currentLeader, longURL);

@@ -570,7 +570,7 @@ inline ProtoAppendEntries Raft::constructAppendRPC(const std::string& receiverNo
     proto_rpc.set_commitindex(prevCommitIndex);
 
     //add all the old logs, that the node is missing
-    for (int oldIndex = prevLogIntex; oldIndex < static_cast<int>(state.log.size()); ++oldIndex) {
+    for (int oldIndex = prevLogIntex; oldIndex >= 0 && oldIndex < static_cast<int>(state.log.size()); ++oldIndex) {
 
         auto& oldEntry = state.log[oldIndex];
     
