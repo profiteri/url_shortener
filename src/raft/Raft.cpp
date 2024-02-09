@@ -24,6 +24,11 @@ static std::string packToAny(T msg) {
     return data;
 }
 
+template <typename T>
+inline static auto getElapsed(T start) {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+}
+
 void Raft::loadPersistentState() {
     int logSize;
     std::ifstream stateFile(stateFilename);
@@ -347,6 +352,7 @@ void Raft::sendRPC(char* data, const std::string& to) {
     } else {
         std::cout << "Error sending msg\n";
         std::cout << std::strerror(errno) << "Error sending msg\n";
+        close(node.writeSockets[to]);
     }
 
 }
@@ -395,7 +401,7 @@ event Raft::listenToRPCs(long timeout) {
             if (pair.second > max_sd) max_sd = pair.second;   
         }
 
-        auto elapsed  = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+        auto elapsed  = getElapsed(start);
         std::cout << "Elapsed: " << elapsed << '\n';
         if (elapsed >= timeout) {
             std::cout << "Timeout expired\n";
@@ -459,6 +465,8 @@ std::mt19937 gen(rd());
 std::uniform_int_distribution<> distr(5000, 6000); // milliseconds
 
 void Raft::run() {
+
+    auto global_clock = std::chrono::steady_clock::now();
 
     while(true) {
         
@@ -525,12 +533,19 @@ void Raft::run() {
                 std::cout << "************\n";
 
                 const std::lock_guard lock(mutex);
+                auto elapsed = getElapsed(global_clock);
+                
+                if (elapsed >= heartbeatTimeout) {
 
-                //send heartbeats
-                for (const auto& addr : node.nodeAddresses) {
+                    //send heartbeats
+                    for (const auto& addr : node.nodeAddresses) {
 
-                    auto rpc = constructAppendRPC(addr, std::nullopt);
-                    sendRPC(packToAny(rpc).data(), addr);
+                        auto rpc = constructAppendRPC(addr, std::nullopt);
+                        sendRPC(packToAny(rpc).data(), addr);
+
+                    }
+
+                    global_clock = std::chrono::steady_clock::now();
 
                 }
 
@@ -564,13 +579,13 @@ inline ProtoAppendEntries Raft::constructAppendRPC(const std::string& receiverNo
     proto_rpc.set_term(state.currentTerm);
     proto_rpc.set_leaderid(node.id);
 
-    auto prevLogIntex = nextIndices.count(receiverNode) == 0 ? prevCommitIndex : nextIndices[receiverNode];
+    auto prevLogIntex = nextIndices.count(receiverNode) == 0 ? 0 : nextIndices[receiverNode];
     proto_rpc.set_prevlogindex(prevLogIntex);
     proto_rpc.set_prevlogterm(state.log.size() == 0 ? -1 : state.log[prevLogIntex].term);
     proto_rpc.set_commitindex(prevCommitIndex);
 
     //add all the old logs, that the node is missing
-    for (int oldIndex = prevLogIntex; oldIndex >= 0 && oldIndex < static_cast<int>(state.log.size()); ++oldIndex) {
+    for (int oldIndex = prevLogIntex; oldIndex < static_cast<int>(state.log.size()); ++oldIndex) {
 
         auto& oldEntry = state.log[oldIndex];
     
@@ -639,7 +654,7 @@ bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &short
     while(true) {
 
         //wait for resposes halp of the heartbeat timeout
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+        auto elapsed = getElapsed(start);
         if (elapsed >= heartbeatTimeout / 2) {
             std::cout << "  -   server thread: timeout while waiting for responses\n";
             break;
