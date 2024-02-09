@@ -192,19 +192,19 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
             if (rv_resp.votegranted()) {
                 receivedVotes++;
                 if (receivedVotes > node.numNodes / 2) {
-                    nodeType = NodeType::Leader;
+                    nodeType.store(NodeType::Leader);
                     updateNextIndices();
                 }
             } else if (rv_resp.term() > state.currentTerm) {
                 state.currentTerm = rv_resp.term();
-                nodeType = NodeType::Follower;
+                nodeType.store(NodeType::Follower);
                 commitStateToFile();
             }
         }
     
     else if (any.UnpackTo(&ae))
         {
-            nodeType = NodeType::Follower;
+            nodeType.store(NodeType::Follower);
             handleAppendEntries(ae, from);
         }
 
@@ -220,7 +220,7 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
                 sendRPC(packToAny(response).data(), from);
                 return;
             }
-            nodeType = NodeType::Follower;
+            nodeType.store(NodeType::Follower);
             handleRequestVote(rv, from);
         }
 }
@@ -239,7 +239,7 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
     if (any.UnpackTo(&ae_resp)) {            
             if (state.currentTerm < ae_resp.term()) {
                 state.currentTerm = ae_resp.term();
-                nodeType = NodeType::Follower;
+                nodeType.store(NodeType::Follower);
                 commitStateToFile();
                 return;
             }
@@ -251,7 +251,7 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
     }
     
     if (any.UnpackTo(&ae)) {
-            nodeType = NodeType::Follower;
+            nodeType.store(NodeType::Follower);
             handleAppendEntries(ae, from);
     }
 
@@ -264,7 +264,7 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
                 sendRPC(packToAny(response).data(), from);
                 return;
             }
-            nodeType = NodeType::Follower;
+            nodeType.store(NodeType::Follower);
             handleRequestVote(rv, from);
     }
 }
@@ -462,7 +462,7 @@ void Raft::run() {
 
     while(true) {
         
-        switch (nodeType) {
+        switch (nodeType.load()) {
 
             case NodeType::Follower: {
 
@@ -477,7 +477,7 @@ void Raft::run() {
                 switch (e.first) {
 
                     case EventType::timeout: {
-                        nodeType = NodeType::Candidate;
+                        nodeType.store(NodeType::Candidate);
                         break;
                     }
 
@@ -670,7 +670,7 @@ bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &short
                 if (state.currentTerm < ae_resp.term()) {
 
                     state.currentTerm = ae_resp.term();
-                    nodeType = NodeType::Follower;
+                    nodeType.store(NodeType::Follower);
                     commitStateToFile();
                     return false;
 
@@ -689,7 +689,7 @@ bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &short
             else {
 
                 handleLeaderRPC(p.first, p.second);
-                if (nodeType != NodeType::Leader) return false;
+                if (nodeType.load() != NodeType::Leader) return false;
 
             }
         }

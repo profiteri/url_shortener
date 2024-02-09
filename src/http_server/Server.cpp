@@ -45,7 +45,7 @@ std::shared_ptr<http_response> Server::cut_url_resource::render(const http_reque
     auto arg = req.get_arg_flat(_cut_full_url_key);
     std::string longURL = std::string(arg);
     std::cout << "Received cut request: " << longURL << std::endl;
-    if (raft.nodeType == Raft::NodeType::Leader) {
+    if (raft.nodeType.load() == Raft::NodeType::Leader) {
         std::pair<bool, std::string> res = raft.storage.cutLongUrl(longURL);
         std::string shortURL = res.second;
         if (res.first) {
