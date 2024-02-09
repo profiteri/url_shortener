@@ -627,6 +627,9 @@ bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &short
     const std::lock_guard lock(mutex);
     std::cout << "  -   server thread: lock aquired\n";
 
+    std::cout << "  -   server thread: state change before call to makeWriteRequest. abort\n";
+    if (raft.nodeType.load() != NodeType::Leader) return false;
+
     Command newCommand = {longUrl, shortUrl};
 
     LogEntry potentialNewEntry = {
