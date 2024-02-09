@@ -41,8 +41,7 @@ public:
     Node& node;
     Storage& storage;
     std::string currentLeader;
-    //std::atomic<NodeType> nodeType = Follower;
-    NodeType nodeType = Follower;
+    std::atomic<NodeType> nodeType{NodeType::Follower};
     std::unordered_map<std::string, int> nextIndices;
 
 private:
