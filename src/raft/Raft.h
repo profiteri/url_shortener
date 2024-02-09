@@ -5,6 +5,7 @@
 #include <optional>
 #include <cstring>
 #include <cerrno>
+#include <atomic>
 #include "node/Node.h"
 #include "RPC.h"
 #include "storage/Storage.h"
@@ -33,44 +34,30 @@ public:
         std::vector<struct LogEntry> log;
     };
 
-    struct WriteRequest {
-        Raft& raft;
-        std::unordered_set<std::string> pendingNodes;
-        struct Command command;
-
-        WriteRequest(Raft& raft, std::string longURL, std::string shortURL) : raft(raft) {
-            for (const auto& pair : raft.nextIndices) {
-                pendingNodes.insert(pair.first);
-            }
-            command.longURL = longURL;
-            command.shortURL = shortURL;
-            raft.updateNextIndices();
-            raft.state.log.emplace_back(raft.state.currentTerm, raft.state.log.size(), command);
-        }
-    };
-
     Raft(Node& node, Storage& storage);
     void run();
+    bool makeWriteRequest(const std::string& longUrl, const std::string& shortUrl);
 
     Node& node;
     Storage& storage;
     std::string currentLeader;
+    //std::atomic<NodeType> nodeType = Follower;
     NodeType nodeType = Follower;
-
-    std::optional<struct WriteRequest> pendingWrite = std::nullopt;
-
     std::unordered_map<std::string, int> nextIndices;
 
 private:
 
     struct State state;
     int prevCommitIndex = -1;
-    int receivedVotes = 1;
+    const long heartbeatTimeout = 3000;
 
     const std::string stateFilename = "/space/state.txt";
     const std::string logFilename = "/space/log.txt";
 
-    
+    int receivedVotes;
+
+    mutable std::mutex mutex;
+
     int receiveRPC(int socket, char* buffer);
 
     void handleFollowerRPC(const std::string& msg, const std::string& from);
@@ -84,6 +71,8 @@ private:
     void updateNextIndices();
     void runElection();
     event listenToRPCs(long timeout);
+
+    inline ProtoAppendEntries constructAppendRPC(const std::string& receiverNode, std::optional<LogEntry> potentialNewEntryOpt);
 
     void loadPersistentState();
     void applyCommand(const Command& command);

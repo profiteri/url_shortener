@@ -20,6 +20,8 @@ private:
 
     std::unordered_set<std::string> nodeAddresses = {"10.0.1.4", "10.0.1.5"};//, "10.0.1.5", "10.0.1.6", "10.0.1.7", "10.0.1.8"};
     int numNodes;
+    int numNodesForConsesus;
+
     std::unordered_map<std::string, int> readSockets;
     std::unordered_map<std::string, int> writeSockets;
 

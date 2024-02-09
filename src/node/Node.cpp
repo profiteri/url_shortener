@@ -139,6 +139,7 @@ Node::Node() {
     id = convertIPToInteger(localIpAddress);
 
     numNodes = nodeAddresses.size();
+    numNodesForConsesus = 1 + (numNodes / 2);
 
     nodeAddresses.erase(localIpAddress);
 

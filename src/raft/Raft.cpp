@@ -236,42 +236,26 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
 
     std::cout << "  -   deserialized: " << any.DebugString() << "\n";
 
-    if (any.UnpackTo(&ae_resp))
-        {            
+    if (any.UnpackTo(&ae_resp)) {            
             if (state.currentTerm < ae_resp.term()) {
                 state.currentTerm = ae_resp.term();
                 nodeType = NodeType::Follower;
                 commitStateToFile();
                 return;
             }
-            if (pendingWrite.has_value()) {
-                auto& pendingNodes = pendingWrite.value().pendingNodes;
-                if (ae_resp.success()) {
-                    if (pendingNodes.find(from) != pendingNodes.end()) {
-                        pendingNodes.erase(from);
-                        ++nextIndices[from];
-                        if (node.numNodes - static_cast<int>(pendingNodes.size()) > node.numNodes / 2) {
-                            commitLogsToFile(prevCommitIndex, prevCommitIndex + 1);
-                            commitStateToFile();
-                            commitToStorage(prevCommitIndex, prevCommitIndex + 1);
-                            prevCommitIndex++;
-                            pendingWrite = std::nullopt;
-                        }
-                    }
-                } else {
-                    --nextIndices[from];
-                }
+            if (ae_resp.success()) {
+                nextIndices[from] = prevCommitIndex;
+            } else {
+                --nextIndices[from];
             }
-        }
+    }
     
-    if (any.UnpackTo(&ae))
-        {
+    if (any.UnpackTo(&ae)) {
             nodeType = NodeType::Follower;
             handleAppendEntries(ae, from);
-        }
+    }
 
-    if (any.UnpackTo(&rv))
-        {
+    if (any.UnpackTo(&rv)) {
             //not vote
             if (rv.term() <= state.currentTerm) {
                 ProtoRequestVoteResponse response;
@@ -282,7 +266,7 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
             }
             nodeType = NodeType::Follower;
             handleRequestVote(rv, from);
-        }
+    }
 }
 
 void Raft::handleAppendEntries(ProtoAppendEntries rpc, const std::string &from) {
@@ -540,47 +524,17 @@ void Raft::run() {
                 std::cout << "I'm a leader\n";
                 std::cout << "************\n";
 
-                int logSize = static_cast<int>(state.log.size());
-                for (const auto& pair : nextIndices) {
-                    ProtoAppendEntries rpc;
-                    rpc.set_term(state.currentTerm);
-                    rpc.set_leaderid(node.id);
-                    rpc.set_commitindex(prevCommitIndex);
-                    if (logSize > 1) {
-                        rpc.set_prevlogindex(state.log[logSize - 2].index);
-                        rpc.set_prevlogterm(state.log[logSize - 2].term);
-                    }
+                const std::lock_guard lock(mutex);
 
-                    // if follower is up to date, pair.second >= logSize
-                    for (int i = pair.second; i < logSize; i++) {
-                        LogEntry& entry = state.log[i];
-                        Command& cmd = entry.command;
+                //send heartbeats
+                for (const auto& addr : node.nodeAddresses) {
 
-                        std:: cout << " -   try construct entry\n";
+                    auto rpc = constructAppendRPC(addr, std::nullopt);
+                    sendRPC(packToAny(rpc).data(), addr);
 
-                        ProtoLogEntry* proto_entry = rpc.add_entries();
-
-                        std:: cout << " -   allocated for entry\n";
-
-                        ProtoCommand* proto_command = proto_entry->mutable_command();
-                        std:: cout << " -   allocated for command\n";
-
-                        std:: cout << " -   long url: "<< cmd.longURL << "\n";
-                        std:: cout << " -   short url: "<< cmd.shortURL << "\n";
-
-                        proto_command->set_longurl(cmd.longURL);
-                        proto_command->set_shorturl(cmd.shortURL);
-                        std:: cout << " -   set command\n";
-
-                        proto_entry->set_term(entry.term);
-                        proto_entry->set_index(entry.index);
-                        std:: cout << " -   set resp of entry\n";
-                    }
-                        sendRPC(packToAny(rpc).data(), pair.first);
                 }
 
-                long timeout = 3000;
-                event e = listenToRPCs(timeout);
+                event e = listenToRPCs(heartbeatTimeout);
 
                 switch (e.first) {
 
@@ -601,6 +555,168 @@ void Raft::run() {
     }
 }
 
+inline ProtoAppendEntries Raft::constructAppendRPC(const std::string& receiverNode, std::optional<LogEntry> potentialNewEntryOpt) {
+
+    //allocate
+    ProtoAppendEntries proto_rpc;
+
+    //set rpc
+    proto_rpc.set_term(state.currentTerm);
+    proto_rpc.set_leaderid(node.id);
+
+    auto prevLogIntex = nextIndices.count(receiverNode) == 0 ? prevCommitIndex : nextIndices[receiverNode];
+    proto_rpc.set_prevlogindex(prevLogIntex);
+    proto_rpc.set_prevlogterm(state.log.size() == 0 ? -1 : state.log[prevLogIntex].term);
+    proto_rpc.set_commitindex(prevCommitIndex);
+
+    //add all the old logs, that the node is missing
+    for (int oldIndex = prevLogIntex; oldIndex < static_cast<int>(state.log.size()); ++oldIndex) {
+
+        auto& oldEntry = state.log[oldIndex];
+    
+        ProtoLogEntry* proto_entry = proto_rpc.add_entries();
+        ProtoCommand*  proto_command = proto_entry->mutable_command();
+
+        //set command
+        proto_command->set_longurl(oldEntry.command.longURL);
+        proto_command->set_shorturl(oldEntry.command.shortURL);        
+    
+        //set entry
+        proto_entry->set_term(oldEntry.term);
+        proto_entry->set_index(oldEntry.index);
+
+    }
+
+    if (!potentialNewEntryOpt.has_value()) return proto_rpc;
+
+    auto potentialNewEntry = potentialNewEntryOpt.value();
+
+    //add potential new log
+    ProtoLogEntry* proto_entry = proto_rpc.add_entries();
+    ProtoCommand*  proto_command = proto_entry->mutable_command();    
+
+    //set command
+    proto_command->set_longurl(potentialNewEntry.command.longURL);
+    proto_command->set_shorturl(potentialNewEntry.command.shortURL);
+    
+    //set entry
+    proto_entry->set_term(potentialNewEntry.term);
+    proto_entry->set_index(potentialNewEntry.index);
+
+    return proto_rpc;
+
+}
+
+bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &shortUrl) {
+
+    const std::lock_guard lock(mutex);
+    std::cout << "  -   server thread: lock aquired\n";
+
+    Command newCommand = {longUrl, shortUrl};
+
+    LogEntry potentialNewEntry = {
+        .term = state.currentTerm, 
+        .index = static_cast<int>(state.log.size()),
+        .command = newCommand,
+    };
+
+    std::cout << "  -   server thread: start sending append RPCs\n";
+
+    //send append requests to each node
+    for (const auto& addr : node.nodeAddresses) {
+
+        auto rpc = constructAppendRPC(addr, std::make_optional<LogEntry>(potentialNewEntry));
+        sendRPC(packToAny(rpc).data(), addr);
+
+    }
+
+    std::cout << "  -   server thread: start waiting for responces\n";
+
+    //this copy is needed to later updater nextIndices of responded noded, if transaction will be commited
+    std::unordered_map<std::string, int> nextIndicesUpd = nextIndices;
+    int receivedApproves = 1;
+    auto start = std::chrono::steady_clock::now();
+    while(true) {
+
+        //wait for resposes halp of the heartbeat timeout
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+        if (elapsed >= heartbeatTimeout / 2) {
+            std::cout << "  -   server thread: timeout while waiting for responses\n";
+            break;
+        }
+        
+        event e = listenToRPCs((heartbeatTimeout / 2) - elapsed);
+
+        //didn't get enought votes. transaction is cancelled. go back to normal heartbeat loop.
+        if (e.first == EventType::timeout) {
+            std::cout << "  -   server thread: timeout while waiting for responses\n";
+            break;
+        }
+
+        else if (e.first == EventType::message) {
+
+            auto p = e.second.value();
+
+            google::protobuf::Any any;
+            any.ParseFromString(p.first);
+
+            //handle here only if AppendEntriesResponse
+            ProtoAppendEntriesResponse ae_resp;
+            if (any.UnpackTo(&ae_resp)) {
+
+                std::cout << "  -   server thread: deserialized AppendEntriesResponse from node: " << p.second << ", " << any.DebugString() << "\n"; 
+                
+                //current term changed, step down
+                if (state.currentTerm < ae_resp.term()) {
+
+                    state.currentTerm = ae_resp.term();
+                    nodeType = NodeType::Follower;
+                    commitStateToFile();
+                    return false;
+
+                }
+
+                if (ae_resp.success()) {
+
+                    ++receivedApproves;
+                    nextIndicesUpd[p.second] = state.log.size();
+
+                }
+
+                else --nextIndices[p.second];
+
+            }
+            else {
+
+                handleLeaderRPC(p.first, p.second);
+                if (nodeType != NodeType::Leader) return false;
+
+            }
+        }
+    }
+
+    if (receivedApproves < node.numNodesForConsesus) {
+        std::cout << "  -   didn't receive enought votes for consesus. abort transaction\n";
+        return false;
+    }
+
+    //received enough successes for consesus. commit transaction
+    std::cout << "  -   received enough successes for consesus\n";
+
+    //add to log
+    state.log.push_back(potentialNewEntry);
+
+    //advance state machine
+    commitLogsToFile(prevCommitIndex, state.log.size() - 1);
+    commitToStorage(prevCommitIndex, state.log.size() - 1);
+    prevCommitIndex = state.log.size() - 1;
+    nextIndices = nextIndicesUpd;
+
+    std::cout << "  -   transaction commited\n";
+
+    return true;
+
+}
 
 void Raft::updateNextIndices() {
     int lastLogIndex = state.log.size();
