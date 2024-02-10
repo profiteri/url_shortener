@@ -16,5 +16,7 @@ fi
 
 for ((i = 0; i < 2; i++))
 do
-    docker run --rm -d --network=cbdp_net --mount source=cbdp-volume,target=/space --name=node_$i cbdp_node
+    docker volume rm cbdp-volume-$i
+    docker volume create cbdp-volume-$i
+    docker run --rm -d --network=cbdp_net --mount source=cbdp-volume-$i,target=/space --name=node_$i cbdp_node
 done
