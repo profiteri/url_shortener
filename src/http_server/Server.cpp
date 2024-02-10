@@ -9,6 +9,9 @@ size_t writeCallback(char* ptr, size_t size, size_t nmemb, std::string* data) {
 }
 
 std::string forwardToLeader(const std::string& leaderIP, const std::string& longURL) {
+    if (leaderIP == "") {
+        return "";
+    }
     CURL* curl = curl_easy_init();
     if (curl) {
         curl_easy_setopt(curl, CURLOPT_URL, leaderIP.c_str());

@@ -283,6 +283,8 @@ void Raft::handleAppendEntries(ProtoAppendEntries rpc, const std::string &from) 
         state.votedFor = -1;
     }
 
+    currentLeader = from;
+
     if (!compareLogEntries(rpc.prevlogindex(), rpc.prevlogterm())) {
 
         //send fail
