@@ -5,17 +5,14 @@
 #include <thread>
 
 int main() {
-    curl_global_init(CURL_GLOBAL_ALL);
     Node node;
     Storage storage;
     Raft raft(node, storage);
-    Server server(raft);
-    std::thread server_thread([&server](){
+    std::thread server_thread([&raft](){
+        Server server(&raft);
         server.run();
     });
     server_thread.detach();
     raft.run();
-    curl_global_cleanup();
     return 0;
-
 }

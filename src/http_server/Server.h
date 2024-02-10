@@ -21,23 +21,23 @@ class Server {
     struct cut_url_resource : public http_resource {
         std::shared_ptr<http_response> render(const http_request&);
 
-        Raft& raft;
+        Raft* raft;
 
-        cut_url_resource(Raft& raft) : raft(raft) {}
+        cut_url_resource(Raft* raft) : raft(raft) {}
     };
 
     struct expand_url_resource : public http_resource {
         std::shared_ptr<http_response> render(const http_request&);
-        Raft& raft;
+        Raft* raft;
 
-        expand_url_resource(Raft& raft) : raft(raft) {}
+        expand_url_resource(Raft* raft) : raft(raft) {}
     }; 
 
 public:
 
-    Raft& r;
+    Raft* r;
 
-    Server(Raft& raft) : r(raft) {
+    Server(Raft* raft) : r(raft) {
         curl_global_init(CURL_GLOBAL_ALL);
     }
 

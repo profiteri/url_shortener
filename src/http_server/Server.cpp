@@ -44,11 +44,11 @@ std::shared_ptr<http_response> Server::cut_url_resource::render(const http_reque
     auto arg = req.get_arg_flat(_cut_full_url_key);
     std::string longURL = std::string(arg);
     std::cout << "Received cut request: " << longURL << std::endl;
-    if (raft.nodeType.load() == Raft::NodeType::Leader) {
-        std::pair<bool, std::string> res = raft.storage.cutLongUrl(longURL);
+    if (raft->nodeType.load() == Raft::NodeType::Leader) {
+        std::pair<bool, std::string> res = raft->storage.cutLongUrl(longURL);
         std::string shortURL = res.second;
         if (res.first) {
-            if (raft.makeWriteRequest(longURL, res.second)) {
+            if (raft->makeWriteRequest(longURL, res.second)) {
                 std::cout << "  -   server side: makeWriteRequest returned true\n";
                 return std::shared_ptr<http_response>(new string_response(_expand_request_path + "?" + _expand_full_url_key + "=" + shortURL));
             }
@@ -61,7 +61,7 @@ std::shared_ptr<http_response> Server::cut_url_resource::render(const http_reque
     } else {
         // forward
         std::string responseData;
-        forwardToLeader(raft.currentLeader, longURL, responseData);
+        forwardToLeader(raft->currentLeader, longURL, responseData);
         return std::shared_ptr<http_response>(new string_response(responseData));
     }
 }
@@ -71,7 +71,7 @@ std::shared_ptr<http_response> Server::expand_url_resource::render(const http_re
     auto arg = req.get_arg_flat(_expand_full_url_key);
     std::string shortURL = std::string(arg);
     std::cout << "Received expand request: " << shortURL << std::endl;
-    std::string resp = raft.storage.expandShortUrl(shortURL);
+    std::string resp = raft->storage.expandShortUrl(shortURL);
     return std::shared_ptr<http_response>(new string_response(resp));
     
 }
