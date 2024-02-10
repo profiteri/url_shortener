@@ -9,9 +9,9 @@
 using namespace httpserver;
 
 static const std::string _cut_request_path = "/cut";
-static const std::string _cut_full_url_key = "full-url";
-static const std::string _expand_request_path = "/expand";
-static const std::string _expand_full_url_key = "short-url";
+static const std::string _cut_full_url_key = "u";
+static const std::string _expand_request_path = "/exp";
+static const std::string _expand_full_url_key = "u";
 
 class Server {
 

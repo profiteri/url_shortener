@@ -85,4 +85,6 @@ private:
 
     void commitToStorage(int prevCommitIndex, int commitIndex);
 
+    void printState();
+
 };

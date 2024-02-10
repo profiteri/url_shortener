@@ -570,7 +570,18 @@ void Raft::run() {
     }
 }
 
+inline void Raft::printState() {
+
+    std::cout << "!!! Current state !!!\n"; 
+    std::cout << "  -> currentTerm: " << state.currentTerm << "\n";
+    std::cout << "  -> votedFor: " << state.votedFor << "\n";
+    std::cout << "  -> log.size(): " << state.log.size() << "\n";
+
+}
+
 inline ProtoAppendEntries Raft::constructAppendRPC(const std::string& receiverNode, std::optional<LogEntry> potentialNewEntryOpt) {
+
+    printState();
 
     //allocate
     ProtoAppendEntries proto_rpc;
@@ -579,13 +590,18 @@ inline ProtoAppendEntries Raft::constructAppendRPC(const std::string& receiverNo
     proto_rpc.set_term(state.currentTerm);
     proto_rpc.set_leaderid(node.id);
 
-    auto prevLogIntex = nextIndices.count(receiverNode) == 0 ? 0 : nextIndices[receiverNode];
+    auto prevLogIntex = nextIndices[receiverNode];
+    std::cout << "  -   constructAppendRPC: prevLogIntex for node " << receiverNode << ": " << prevLogIntex << "\n";
+    std::cout << "  -   constructAppendRPC: nextIndices[receiverNode]: " << nextIndices[receiverNode] << "\n";
+
     proto_rpc.set_prevlogindex(prevLogIntex);
     proto_rpc.set_prevlogterm(state.log.size() == 0 ? -1 : state.log[prevLogIntex].term);
     proto_rpc.set_commitindex(prevCommitIndex);
 
+    std::cout << "  -   constructAppendRPC: start constructing RPCs\n";
+
     //add all the old logs, that the node is missing
-    for (int oldIndex = prevLogIntex; oldIndex < static_cast<int>(state.log.size()); ++oldIndex) {
+    for (int oldIndex = prevLogIntex; oldIndex < prevCommitIndex; ++oldIndex) {
 
         auto& oldEntry = state.log[oldIndex];
     
@@ -600,9 +616,16 @@ inline ProtoAppendEntries Raft::constructAppendRPC(const std::string& receiverNo
         proto_entry->set_term(oldEntry.term);
         proto_entry->set_index(oldEntry.index);
 
+        std::cout << "  -   constructAppendRPC: adding old entry:\n";
+        std::cout << proto_entry->DebugString();
+
     }
 
-    if (!potentialNewEntryOpt.has_value()) return proto_rpc;
+    if (!potentialNewEntryOpt.has_value()) {
+        std::cout << "  -   constructAppendRPC: no new entries, sending:\n";
+        std::cout << proto_rpc.DebugString(); 
+        return proto_rpc;
+    }
 
     auto potentialNewEntry = potentialNewEntryOpt.value();
 
@@ -618,6 +641,9 @@ inline ProtoAppendEntries Raft::constructAppendRPC(const std::string& receiverNo
     proto_entry->set_term(potentialNewEntry.term);
     proto_entry->set_index(potentialNewEntry.index);
 
+    std::cout << "  -   constructAppendRPC: adding new entry:\n";
+    std::cout << proto_entry->DebugString();
+
     return proto_rpc;
 
 }
@@ -627,8 +653,10 @@ bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &short
     const std::lock_guard lock(mutex);
     std::cout << "  -   server thread: lock aquired\n";
 
-    std::cout << "  -   server thread: state change before call to makeWriteRequest. abort\n";
-    if (raft.nodeType.load() != NodeType::Leader) return false;
+    if (nodeType.load() != NodeType::Leader) {
+        std::cout << "  -   server thread: state change before call to makeWriteRequest. abort\n";
+        return false;
+    }
 
     Command newCommand = {longUrl, shortUrl};
 
@@ -737,9 +765,11 @@ bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &short
 }
 
 void Raft::updateNextIndices() {
-    int lastLogIndex = state.log.size();
+    std::cout << "  -   updating next indeces\n";
+    int lastLogIndex = prevCommitIndex;
     for (const std::string& nodeAddress : node.nodeAddresses) {
         nextIndices[nodeAddress] = lastLogIndex;
+        std::cout << "  -   set " << nodeAddress << " to: " << lastLogIndex << "\n";
     }
 }
 
