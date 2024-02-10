@@ -30,19 +30,15 @@ inline static auto getElapsed(T start) {
 }
 
 void Raft::loadPersistentState() {
-    int logSize;
     std::ifstream stateFile(stateFilename);
     if (stateFile.is_open()) {
         stateFile >> state.currentTerm;
         stateFile >> state.votedFor;
-
-        stateFile >> logSize;
-
         stateFile.close();
     }
     std::ifstream logFile(logFilename);
     if (logFile.is_open()) {
-        for (int i = 0; i < logSize; ++i) {
+        while (!logFile.eof()) {
             LogEntry entry;
             logFile >> entry.term;
             logFile >> entry.index;
