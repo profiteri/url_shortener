@@ -1,19 +1,20 @@
 #include "Server.h"
 
 
-std::string forwardToLeader(const std::string& leaderIP, const std::string& longURL) {
+void forwardToLeader(const std::string& leaderIP, const std::string& longURL, std::string& responseData) {
    if (leaderIP.empty()) {
         std::cerr << "Leader IP is not provided." << std::endl;
-        return "";
+        responseData = "";
+        return;
     }
 
     CURL* curl = curl_easy_init();
     if (!curl) {
         std::cerr << "Failed to initialize cURL" << std::endl;
-        return "";
+        responseData = "";
+        return;
     }
 
-    std::string response_data;
     std::string endpointString = leaderIP + _cut_request_path + "?" + _cut_full_url_key + "=" + longURL;
     curl_easy_setopt(curl, CURLOPT_URL, endpointString.c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -21,19 +22,20 @@ std::string forwardToLeader(const std::string& leaderIP, const std::string& long
         data->append(ptr, size * nmemb);
         return size * nmemb;
     });
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseData);
 
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
         curl_easy_cleanup(curl);
-        return "";
+        responseData = "";
+        return;
     }
 
     std::cout << "curl successful" << std::endl;
 
     curl_easy_cleanup(curl);
-    return response_data;
+    return;
 }
 
 
@@ -58,8 +60,9 @@ std::shared_ptr<http_response> Server::cut_url_resource::render(const http_reque
         return std::shared_ptr<http_response>(new string_response(_expand_request_path + "?" + _expand_full_url_key + "=" + shortURL));
     } else {
         // forward
-        std::string resp = forwardToLeader(raft.currentLeader, longURL);
-        return std::make_shared<string_response>(resp);
+        std::string responseData;
+        forwardToLeader(raft.currentLeader, longURL, responseData);
+        return std::shared_ptr<http_response>(new string_response(responseData));
     }
 }
 
