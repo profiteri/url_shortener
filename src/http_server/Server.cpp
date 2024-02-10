@@ -16,8 +16,7 @@ std::string forwardToLeader(const std::string& leaderIP, const std::string& long
     if (curl) {
         curl_easy_setopt(curl, CURLOPT_URL, leaderIP.c_str());
 
-        curl_easy_setopt(curl, CURLOPT_POST, 1L);
-        std::string endpointString = _cut_request_path + "/" + _cut_full_url_key + "=" + longURL;
+        std::string endpointString = _cut_request_path + "?" + _cut_full_url_key + "=" + longURL;
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, endpointString.c_str());
 
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
