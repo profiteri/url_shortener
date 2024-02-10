@@ -1,46 +1,41 @@
 #include "Server.h"
 
-size_t writeCallback(char* ptr, size_t size, size_t nmemb, std::string* data) {
-    if (data == nullptr) {
-        return 0;
-    }
-    data->append(ptr, size * nmemb);
-    return size * nmemb;
-}
 
 std::string forwardToLeader(const std::string& leaderIP, const std::string& longURL) {
-    if (leaderIP == "") {
+   if (leaderIP.empty()) {
+        std::cerr << "Leader IP is not provided." << std::endl;
         return "";
     }
+
     CURL* curl = curl_easy_init();
-    if (curl) {
-        curl_easy_setopt(curl, CURLOPT_URL, leaderIP.c_str());
-
-        std::string endpointString = _cut_request_path + "?" + _cut_full_url_key + "=" + longURL;
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, endpointString.c_str());
-
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-
-        std::string response_data;
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
-
-        CURLcode res = curl_easy_perform(curl);
-        if (res == CURLE_OK) {
-            std::cout << "Response: " << response_data << std::endl;
-            return response_data;
-        } else {
-            std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
-            return "";
-        }
-
-        // Cleanup
-        curl_easy_cleanup(curl);
-    } else {
+    if (!curl) {
         std::cerr << "Failed to initialize cURL" << std::endl;
+        return "";
     }
-    return "";
+
+    std::string response_data;
+    std::string endpointString = leaderIP + _cut_request_path + "?" + _cut_full_url_key + "=" + longURL;
+    curl_easy_setopt(curl, CURLOPT_URL, endpointString.c_str());
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, [](char* ptr, size_t size, size_t nmemb, std::string* data) {
+        data->append(ptr, size * nmemb);
+        return size * nmemb;
+    });
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
+
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+        curl_easy_cleanup(curl);
+        return "";
+    }
+
+    std::cout << "curl successful" << std::endl;
+
+    curl_easy_cleanup(curl);
+    return response_data;
 }
+
 
 std::shared_ptr<http_response> Server::cut_url_resource::render(const http_request& req) {
 

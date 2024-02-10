@@ -368,8 +368,8 @@ void Raft::runElection() {
     ProtoRequestVote requestVote;
     requestVote.set_term(state.currentTerm);
     requestVote.set_candidateid(node.id);
-    requestVote.set_lastlogindex(logSize ? state.log.back().index : -1);
-    requestVote.set_lastlogterm(logSize ? state.log.back().term : -1);
+    requestVote.set_lastlogindex(logSize > 0 ? state.log.back().index : -1);
+    requestVote.set_lastlogterm(logSize > 0 ? state.log.back().term : -1);
 
     for (const std::string& nodeAddress : node.nodeAddresses) {
         sendRPC(packToAny(requestVote).data(), nodeAddress);        
