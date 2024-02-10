@@ -249,7 +249,7 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
                 return;
             }
             if (ae_resp.success()) {
-                nextIndices[from] = prevCommitIndex;
+                nextIndices[from] = prevCommitIndex + 1;
             } else {
                 --nextIndices[from];
             }
@@ -592,18 +592,18 @@ inline ProtoAppendEntries Raft::constructAppendRPC(const std::string& receiverNo
     proto_rpc.set_term(state.currentTerm);
     proto_rpc.set_leaderid(node.id);
 
-    auto prevLogIntex = nextIndices[receiverNode];
-    std::cout << "  -   constructAppendRPC: prevLogIntex for node " << receiverNode << ": " << prevLogIntex << "\n";
+    auto prevLogIndex = nextIndices[receiverNode] - 1;
+    std::cout << "  -   constructAppendRPC: prevLogIndex for node " << receiverNode << ": " << prevLogIndex << "\n";
     std::cout << "  -   constructAppendRPC: nextIndices[receiverNode]: " << nextIndices[receiverNode] << "\n";
 
-    proto_rpc.set_prevlogindex(prevLogIntex);
-    proto_rpc.set_prevlogterm(state.log.size() == 0 ? -1 : state.log[prevLogIntex].term);
+    proto_rpc.set_prevlogindex(prevLogIndex);
+    proto_rpc.set_prevlogterm(prevLogIndex == -1 ? -1 : state.log[prevLogIndex].term);
     proto_rpc.set_commitindex(prevCommitIndex);
 
     std::cout << "  -   constructAppendRPC: start constructing RPCs\n";
 
     //add all the old logs, that the node is missing
-    for (int oldIndex = prevLogIntex; oldIndex < prevCommitIndex; ++oldIndex) {
+    for (int oldIndex = nextIndices[receiverNode]; oldIndex <= prevCommitIndex; ++oldIndex) {
 
         auto& oldEntry = state.log[oldIndex];
     
@@ -768,10 +768,10 @@ bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &short
 
 void Raft::updateNextIndices() {
     std::cout << "  -   updating next indeces\n";
-    int lastLogIndex = prevCommitIndex;
+    int lastLeaderLogIndex = prevCommitIndex;
     for (const std::string& nodeAddress : node.nodeAddresses) {
-        nextIndices[nodeAddress] = lastLogIndex;
-        std::cout << "  -   set " << nodeAddress << " to: " << lastLogIndex << "\n";
+        nextIndices[nodeAddress] = lastLeaderLogIndex + 1;
+        std::cout << "  -   set " << nodeAddress << " to: " << lastLeaderLogIndex + 1 << "\n";
     }
 }
 
