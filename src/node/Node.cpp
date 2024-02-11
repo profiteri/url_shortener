@@ -47,6 +47,7 @@ std::string Node::getLocalIpAddress() {
 }
 
 void Node::acceptConnection() {
+    std::cout << "Try accept new connection\n";
     sockaddr_in senderAddress;
     socklen_t addrlen = sizeof(senderAddress);
     int nodeSocket = accept(listeningSocket, (struct sockaddr*)&senderAddress, &addrlen);
