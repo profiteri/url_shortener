@@ -47,9 +47,6 @@ std::pair<bool, std::string>  Storage::cutLongUrl(const std::string& longURL) {
     // Append counter to handle duplicate hash values
     shortHash += std::to_string(longToShort.size());
 
-    longToShort[longURL] = shortHash;
-    shortToLong[shortHash] = longURL;
-
     std::cout << longURL << " -> " << shortHash << " (new entry)" << std::endl;
 
     return std::make_pair(true, shortHash);
