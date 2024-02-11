@@ -48,7 +48,7 @@ private:
 
     struct State state;
     int prevCommitIndex = -1;
-    const long heartbeatTimeout = 1000;
+    const long heartbeatTimeout = 2000;
 
     const std::string stateFilename = "/space/state.txt";
     const std::string logFilename = "/space/log.txt";
@@ -69,7 +69,7 @@ private:
     void sendRPC(char* data, const std::string& to);
     void updateNextIndices();
     void runElection();
-    event listenToRPCs(long timeout);
+    std::vector<event> listenToRPCs(long timeout);
 
     inline ProtoAppendEntries constructAppendRPC(const std::string& receiverNode, std::optional<LogEntry> potentialNewEntryOpt);
 

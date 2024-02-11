@@ -196,6 +196,7 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
 
     if (any.UnpackTo(&rv_resp))
         {    
+            std::cout << "  -   got vote: " << rv_resp.votegranted() << "\n";
             if (rv_resp.votegranted()) {
                 receivedVotes++;
                 if (receivedVotes > node.numNodes / 2) {
@@ -380,7 +381,7 @@ void Raft::runElection() {
 }
 
 // <msg, sender IP>
-event Raft::listenToRPCs(long timeout) {
+std::vector<event> Raft::listenToRPCs(long timeout) {
 
     int master_socket = node.listeningSocket;
 
@@ -410,7 +411,8 @@ event Raft::listenToRPCs(long timeout) {
         std::cout << "Elapsed: " << elapsed << '\n';
         if (elapsed >= timeout) {
             std::cout << "Timeout expired\n";
-            return {EventType::timeout, std::nullopt};
+            event e = {EventType::timeout, std::nullopt};
+            return {e};
         }
 
         struct timeval tv;
@@ -430,7 +432,8 @@ event Raft::listenToRPCs(long timeout) {
         }
         else if (activity == 0) {
             std::cout << "Timeout expired\n";
-            return {EventType::timeout, std::nullopt};
+            event e = {EventType::timeout, std::nullopt};
+            return {e};
         }
              
         //If something happened on my socket,  
@@ -440,13 +443,21 @@ event Raft::listenToRPCs(long timeout) {
             continue;
         }   
              
+        std::cout << "Start looping throught sockets\n";
+
+        std::vector<event> res;
+
         //else its some IO operation on some other socket 
         for (auto it = node.readSockets.begin(); it != node.readSockets.end(); ) {
                  
+            std::cout << "Node: " << it->first << "\n";
+
             if (FD_ISSET(it->second, &readfds)) {
                 
                 std::vector<char> buffer(4096);
                 int bytesReceived = recv(it->second, &buffer[0], buffer.size(), 0);
+
+                std::cout << "Received something" << "\n";
 
                 if (bytesReceived == 0) { //someone disconnected
                     std::cout << "Node disconnected: " << it->first << " on socket: " << it->second << '\n';
@@ -458,12 +469,17 @@ event Raft::listenToRPCs(long timeout) {
                     ++it;
                 }
                 else { //message received
+                    std::cout << "Received message" << "\n";
                     std::pair p = {std::string{buffer.begin(), buffer.end()}, it->first};
-                    return {EventType::message, {p}};
+                    event e = {EventType::message, {p}};
+                    res.push_back(e);
                     ++it;
                 }
-            }   
+            }
+            else ++it;
         }
+
+        if (!res.empty()) return res;
     }
 }
 
@@ -487,20 +503,18 @@ void Raft::run() {
 
                 //setup heartbeats timeout (sec), after which node runs election
                 long timeout = static_cast<long>(distr(gen));
-                event e = listenToRPCs(timeout);
+                auto events = listenToRPCs(timeout);
 
-                switch (e.first) {
+                for (const auto& e : events) {
 
-                    case EventType::timeout: {
+                    if (e.first == EventType::timeout) {
                         nodeType.store(NodeType::Candidate);
-                        break;
                     }
 
-                    case EventType::message: {
+                    else if (e.first == EventType::message) {
                         auto p = e.second.value();
                         std::cout << "  -   got msg as follower" << '\n';
                         handleFollowerRPC(p.first, p.second);
-                        break;
                     }
                 }
                 break;
@@ -515,19 +529,18 @@ void Raft::run() {
                 runElection();
 
                 long timeout = static_cast<long>(distr(gen));
-                event e = listenToRPCs(timeout);
+                auto events = listenToRPCs(timeout);
 
-                switch (e.first) {
+                for (const auto& e : events) {
 
-                    case EventType::timeout: {
+                    if (e.first == EventType::timeout) {
                         continue;
                     }
-
-                    case EventType::message: {
+                    
+                    else if (e.first == EventType::message) {
                         auto p = e.second.value();
                         std::cout << "  -   got msg as candidate" << '\n';
                         handleCandidateRPC(p.first, p.second);
-                        break;
                     }
                 }
                 break;
@@ -556,23 +569,21 @@ void Raft::run() {
 
                 }
 
-                event e = listenToRPCs(heartbeatTimeout);
+                auto events = listenToRPCs(heartbeatTimeout);
 
-                switch (e.first) {
+                for (const auto& e : events) {
 
-                    case EventType::timeout: {
-                        break;
+                    if (e.first == EventType::timeout) {
+                        continue;
                     }
 
-                    case EventType::message: {
+                    else if (e.first == EventType::message) {
                         auto p = e.second.value();
                         std::cout << "Got msg: " << p.first << '\n';
                         handleLeaderRPC(p.first, p.second);
-                        break;
                     }
                 }
             }
-
         }
     }
 }
@@ -699,52 +710,55 @@ bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &short
             break;
         }
         
-        event e = listenToRPCs((heartbeatTimeout / 2) - elapsed);
+        auto events = listenToRPCs(heartbeatTimeout - elapsed);
 
-        //didn't get enought votes. transaction is cancelled. go back to normal heartbeat loop.
-        if (e.first == EventType::timeout) {
-            std::cout << "  -   server thread: timeout while waiting for responses\n";
-            break;
-        }
+        for (const auto& e : events) { 
 
-        else if (e.first == EventType::message) {
-
-            auto p = e.second.value();
-
-            google::protobuf::Any any;
-            any.ParseFromString(p.first);
-
-            //handle here only if AppendEntriesResponse
-            ProtoAppendEntriesResponse ae_resp;
-            if (any.UnpackTo(&ae_resp)) {
-
-                std::cout << "  -   server thread: deserialized AppendEntriesResponse from node: " << p.second << ", " << any.DebugString() << "\n"; 
-                
-                //current term changed, step down
-                if (state.currentTerm < ae_resp.term()) {
-
-                    state.currentTerm = ae_resp.term();
-                    nodeType.store(NodeType::Follower);
-                    commitStateToFile();
-                    return false;
-
-                }
-
-                if (ae_resp.success()) {
-
-                    ++receivedApproves;
-                    nextIndicesUpd[p.second] = state.log.size();
-
-                }
-
-                else --nextIndices[p.second];
-
+            //didn't get enought votes. transaction is cancelled. go back to normal heartbeat loop.
+            if (e.first == EventType::timeout) {
+                std::cout << "  -   server thread: timeout while waiting for responses\n";
+                break;
             }
-            else {
 
-                handleLeaderRPC(p.first, p.second);
-                if (nodeType.load() != NodeType::Leader) return false;
+            else if (e.first == EventType::message) {
 
+                auto p = e.second.value();
+
+                google::protobuf::Any any;
+                any.ParseFromString(p.first);
+
+                //handle here only if AppendEntriesResponse
+                ProtoAppendEntriesResponse ae_resp;
+                if (any.UnpackTo(&ae_resp)) {
+
+                    std::cout << "  -   server thread: deserialized AppendEntriesResponse from node: " << p.second << ", " << any.DebugString() << "\n"; 
+                    
+                    //current term changed, step down
+                    if (state.currentTerm < ae_resp.term()) {
+
+                        state.currentTerm = ae_resp.term();
+                        nodeType.store(NodeType::Follower);
+                        commitStateToFile();
+                        return false;
+
+                    }
+
+                    if (ae_resp.success()) {
+
+                        ++receivedApproves;
+                        nextIndicesUpd[p.second] = state.log.size();
+
+                    }
+
+                    else --nextIndices[p.second];
+
+                }
+                else {
+
+                    handleLeaderRPC(p.first, p.second);
+                    if (nodeType.load() != NodeType::Leader) return false;
+
+                }
             }
         }
     }
