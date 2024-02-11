@@ -418,11 +418,13 @@ event Raft::listenToRPCs(long timeout) {
         tv.tv_usec = ((timeout - elapsed) % 1000) * 1000;
 
         std::cout << "Seconds left: " << tv.tv_sec << '\n';
+        std::cout << "Useconds left: " << tv.tv_usec << '\n';
 
         //wait for an activity on one of the sockets
         std::cout << "Waiting for activity...\n";
-        int activity = select(max_sd + 1, &readfds, NULL, NULL, &tv);   
-       
+        int activity = select(max_sd + 1, &readfds, NULL, NULL, &tv);
+        std::cout << "Select terminated\n";
+
         if (activity == -1) { 
             std::cerr << "Select error: " << errno << " " << std::strerror(errno) << '\n';
         }
@@ -655,6 +657,7 @@ inline ProtoAppendEntries Raft::constructAppendRPC(const std::string& receiverNo
 
 bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &shortUrl) {
 
+    std::cout << "  -   server thread: trying to aquire lock\n";
     const std::lock_guard lock(mutex);
     std::cout << "  -   server thread: lock aquired\n";
 
