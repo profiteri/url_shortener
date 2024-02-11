@@ -145,7 +145,7 @@ Node::Node() {
     nodeAddresses.erase(localIpAddress);
 
     // use 4343 for commmunication between nodes
-    setupListeningSocket("4343");
+    if (setupListeningSocket("4343")) throw std::runtime_error("");
 
 }
 
