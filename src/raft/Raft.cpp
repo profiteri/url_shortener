@@ -204,6 +204,7 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
                 }
             } else if (rv_resp.term() > state.currentTerm) {
                 state.currentTerm = rv_resp.term();
+                state.votedFor = -1;
                 nodeType.store(NodeType::Follower);
                 commitStateToFile();
             }
@@ -246,6 +247,7 @@ void Raft::handleLeaderRPC(const std::string& msg, const std::string& from) {
     if (any.UnpackTo(&ae_resp)) {            
             if (state.currentTerm < ae_resp.term()) {
                 state.currentTerm = ae_resp.term();
+                state.votedFor = -1;
                 nodeType.store(NodeType::Follower);
                 commitStateToFile();
                 return;
@@ -724,6 +726,7 @@ bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &short
                 if (state.currentTerm < ae_resp.term()) {
 
                     state.currentTerm = ae_resp.term();
+                    state.votedFor = -1;
                     nodeType.store(NodeType::Follower);
                     commitStateToFile();
                     return false;
