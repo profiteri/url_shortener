@@ -18,7 +18,7 @@ private:
     std::string localIpAddress;
     int listeningSocket;
 
-    std::unordered_set<std::string> nodeAddresses = {"10.0.1.4", "10.0.1.5"};//, "10.0.1.5", "10.0.1.6", "10.0.1.7", "10.0.1.8"};
+    std::unordered_set<std::string> nodeAddresses = {"10.0.1.4", "10.0.1.5", "10.0.1.6"};
     int numNodes;
     int numNodesForConsesus;
 

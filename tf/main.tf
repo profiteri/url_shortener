@@ -123,7 +123,7 @@ resource "azurerm_virtual_machine_extension" "my_vm_extension" {
 
   settings = <<SETTINGS
 {
- "commandToExecute": "sudo apt-get update"
+ "commandToExecute": "sudo apt-get update && sudo snap install docker"
 }
 SETTINGS
 
