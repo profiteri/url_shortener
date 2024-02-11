@@ -30,6 +30,9 @@ inline static auto getElapsed(T start) {
 }
 
 void Raft::loadPersistentState() {
+
+    std::cout << "Start loading persistent state...\n";
+
     std::ifstream stateFile(stateFilename);
     if (stateFile.is_open()) {
         stateFile >> state.currentTerm;
@@ -52,6 +55,9 @@ void Raft::loadPersistentState() {
         }
         logFile.close();
     }
+
+    std::cout << "Loading persistent state done\n";
+
 }
 
 

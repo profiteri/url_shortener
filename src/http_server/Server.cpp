@@ -1,7 +1,15 @@
 #include "Server.h"
 
+static size_t writeCallback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
 
 void forwardToLeader(const std::string& leaderIP, const std::string& longURL, std::string& responseData) {
+
+    std::cout << "Forwarding request to leader" << std::endl;
+
    if (leaderIP.empty()) {
         std::cerr << "Leader IP is not provided." << std::endl;
         responseData = "";
@@ -16,23 +24,23 @@ void forwardToLeader(const std::string& leaderIP, const std::string& longURL, st
     }
 
     std::string endpointString = leaderIP + _cut_request_path + "?" + _cut_full_url_key + "=" + longURL;
+    std::cout << "Endpoint: " << endpointString << "\n";
+    
     curl_easy_setopt(curl, CURLOPT_URL, endpointString.c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, [](char* ptr, size_t size, size_t nmemb, std::string* data) {
-        data->append(ptr, size * nmemb);
-        return size * nmemb;
-    });
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseData);
-
+    
     CURLcode res = curl_easy_perform(curl);
+
     if (res != CURLE_OK) {
         std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
         curl_easy_cleanup(curl);
         responseData = "";
         return;
     }
-
-    std::cout << "curl successful" << std::endl;
+    
+    std::cout << "curl successful, response data: " << responseData << std::endl;
 
     curl_easy_cleanup(curl);
     return;

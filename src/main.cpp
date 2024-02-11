@@ -5,9 +5,18 @@
 #include <thread>
 
 int main() {
+
+    std::cout << "Starting the node...\n";
+
     Node node;
+    std::cout << "Node created\n";
+
     Storage storage;
+    std::cout << "Storage created\n";
+
     Raft raft(node, storage);
+    std::cout << "Raft created\n";
+
     std::thread server_thread([&raft](){
         Server server(&raft);
         server.run();
