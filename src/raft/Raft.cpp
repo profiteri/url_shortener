@@ -701,6 +701,8 @@ bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &short
 
     }
 
+    Log::stat("Write requests sent");
+
     std::cout << "  -   server thread: start waiting for responces\n";
 
     //this copy is needed to later updater nextIndices of responded noded, if transaction will be commited
@@ -769,6 +771,8 @@ bool Raft::makeWriteRequest(const std::string &longUrl, const std::string &short
             }
         }
     }
+
+    Log::stat("All responses collected");
 
     if (receivedApproves < node.numNodesForConsesus) {
         std::cout << "  -   didn't receive enought votes for consesus. abort transaction\n";

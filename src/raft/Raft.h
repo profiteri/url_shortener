@@ -62,10 +62,10 @@ private:
     struct State state;
     int prevCommitIndex = -1;
 
-    const long listenTimeoutLowest = 400;
-    const long listenTimeoutHighest = 500;
+    const long listenTimeoutLowest = 100;
+    const long listenTimeoutHighest = 120;
 
-    const long heartbeatTimeout = 100;
+    const long heartbeatTimeout = 20;
 
     const std::string stateFilename = "/space/state.txt";
     const std::string logFilename = "/space/log.txt";

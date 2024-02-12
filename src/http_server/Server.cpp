@@ -59,6 +59,7 @@ std::shared_ptr<http_response> Server::cut_url_resource::render(const http_reque
         std::pair<bool, std::string> res = raft->storage.cutLongUrl(longURL);
         std::string shortURL = res.second;
         if (res.first) {
+            Log::stat("URL generated, sending a write request");
             if (raft->makeWriteRequest(longURL, res.second)) {
                 std::cout << "  -   server side: makeWriteRequest returned true\n";
                 Log::stat("Finished CUT request succesfull with write request");
