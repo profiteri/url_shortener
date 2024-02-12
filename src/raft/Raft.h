@@ -6,8 +6,8 @@
 #include <cstring>
 #include <cerrno>
 #include <atomic>
+
 #include "node/Node.h"
-#include "RPC.h"
 #include "storage/Storage.h"
 #include "requests.pb.h"
 
@@ -27,6 +27,18 @@ public:
         Candidate = 1,
         Leader = 2
     };
+
+    struct Command {
+        std::string longURL;
+        std::string shortURL;
+    };
+
+
+    struct LogEntry {
+        int term;
+        int index;
+        struct Command command;
+    };   
 
     struct State {
         int currentTerm = 0;

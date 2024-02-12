@@ -2,9 +2,13 @@
 #include "node/Node.h"
 #include "storage/Storage.h"
 #include "raft/Raft.h"
+#include "Log.h"
+
 #include <thread>
 
 int main() {
+
+    Log::init();
 
     std::cout << "Starting the node...\n";
 

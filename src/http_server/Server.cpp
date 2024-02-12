@@ -1,4 +1,5 @@
 #include "Server.h"
+#include "Log.h"
 
 static size_t writeCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
@@ -49,6 +50,8 @@ void forwardToLeader(const std::string& leaderIP, const std::string& longURL, st
 
 std::shared_ptr<http_response> Server::cut_url_resource::render(const http_request& req) {
 
+    Log::stat("Received CUT request");
+
     auto arg = req.get_arg_flat(_cut_full_url_key);
     std::string longURL = std::string(arg);
     std::cout << "Received cut request: " << longURL << std::endl;
@@ -58,28 +61,36 @@ std::shared_ptr<http_response> Server::cut_url_resource::render(const http_reque
         if (res.first) {
             if (raft->makeWriteRequest(longURL, res.second)) {
                 std::cout << "  -   server side: makeWriteRequest returned true\n";
+                Log::stat("Finished CUT request succesfull with write request");
                 return std::shared_ptr<http_response>(new string_response(_expand_request_path + "?" + _expand_full_url_key + "=" + shortURL));
             }
             else {
                 std::cout << "  -   server side: makeWriteRequest returned false\n";
+                Log::stat("Finished CUT request unsuccesfull with write request");
                 return std::shared_ptr<http_response>(new string_response(""));
             }
         }
+        Log::stat("Finished CUT request succesfull without write request");
         return std::shared_ptr<http_response>(new string_response(_expand_request_path + "?" + _expand_full_url_key + "=" + shortURL));
     } else {
         // forward
         std::string responseData;
         forwardToLeader(raft->currentLeader, longURL, responseData);
+        Log::stat("Finished CUT request with forwarding");
         return std::shared_ptr<http_response>(new string_response(responseData));
     }
 }
 
 std::shared_ptr<http_response> Server::expand_url_resource::render(const http_request& req) {
 
+    Log::stat("Received EXPAND request");
+
     auto arg = req.get_arg_flat(_expand_full_url_key);
     std::string shortURL = std::string(arg);
     std::cout << "Received expand request: " << shortURL << std::endl;
     std::string resp = raft->storage.expandShortUrl(shortURL);
+
+    Log::stat("Finished EXPAND request");
     return std::shared_ptr<http_response>(new string_response(resp));
     
 }

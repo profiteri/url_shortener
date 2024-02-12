@@ -1,4 +1,5 @@
 #include "Raft.h"
+#include "Log.h"
 #include "google/protobuf/any.pb.h"
 
 #include <fstream>
@@ -201,12 +202,14 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
                 receivedVotes++;
                 if (receivedVotes > node.numNodes / 2) {
                     nodeType.store(NodeType::Leader);
+                    Log::stat("End election, becoming LEADER");
                     updateNextIndices();
                 }
             } else if (rv_resp.term() > state.currentTerm) {
                 state.currentTerm = rv_resp.term();
                 state.votedFor = -1;
                 nodeType.store(NodeType::Follower);
+                Log::stat("End election, becoming FOLLOWER");
                 commitStateToFile();
             }
         }
@@ -230,6 +233,7 @@ void Raft::handleCandidateRPC(const std::string& msg, const std::string& from) {
                 return;
             }
             nodeType.store(NodeType::Follower);
+            Log::stat("End election, becoming FOLLOWER");
             handleRequestVote(rv, from);
         }
 }
@@ -527,6 +531,8 @@ void Raft::run() {
                 std::cout << "**************\n";
                 std::cout << "Start election\n";
                 std::cout << "**************\n";
+
+                Log::stat("Start election of: %s", node.localIpAddress.c_str());
 
                 runElection();
 
