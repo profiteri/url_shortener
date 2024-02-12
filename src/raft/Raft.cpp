@@ -3,7 +3,6 @@
 #include "google/protobuf/any.pb.h"
 
 #include <fstream>
-#include <cerrno>
 #include <chrono>
 #include <sys/time.h>
 #include <netinet/in.h>
@@ -11,7 +10,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <random>
 
 template <typename T>
 static std::string packToAny(T msg) {
@@ -489,11 +487,11 @@ std::vector<event> Raft::listenToRPCs(long timeout) {
     }
 }
 
-std::random_device rd;
-std::mt19937 gen(rd());
-std::uniform_int_distribution<> distr(5000, 6000); // milliseconds
-
 void Raft::run() {
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distr(listenTimeoutLowest, listenTimeoutHighest); // milliseconds    
 
     auto global_clock = std::chrono::steady_clock::now();
 

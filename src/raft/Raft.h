@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cerrno>
 #include <atomic>
+#include <random>
 
 #include "node/Node.h"
 #include "storage/Storage.h"
@@ -61,8 +62,8 @@ private:
     struct State state;
     int prevCommitIndex = -1;
 
-    const long listenTimeoutLowest = 500;
-    const long listenTimeoutHighest = 400;
+    const long listenTimeoutLowest = 400;
+    const long listenTimeoutHighest = 500;
 
     const long heartbeatTimeout = 100;
 
