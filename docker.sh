@@ -9,6 +9,4 @@ if [ "$1" == "build" ]; then
 
 fi
 
-docker run --rm -it --network host -v ./data:/cbdp/data --mount source=cbdp-volume,target=/space --name=node cbdp_node bash
-#docker run --rm -it --network host --mount source=cbdp-volume,target=/space --name=node cbdp_node bash
-# docker run --rm -it --network host --mount source=cbdp-volume,target=/space -v /home/bravehead/group-1-url-shortener:/cbdp --name=node cbdp_node bash
+docker run --rm -d --network host -v ./data:/cbdp/data --mount source=cbdp-volume,target=/space --name=node cbdp_node bash

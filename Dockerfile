@@ -7,5 +7,5 @@ COPY proto proto
 COPY CMakeLists.txt .
 
 RUN mkdir build && cd build && cmake .. && make
-ENTRYPOINT /bin/bash
-#ENTRYPOINT ./build/node
+
+ENTRYPOINT ./build/node
