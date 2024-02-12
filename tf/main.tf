@@ -112,18 +112,75 @@ resource "azurerm_linux_virtual_machine" "my_vm" {
 
 }
 
+resource "null_resource" "installer_1" {
+
+  provisioner "file" {
+    source      = "${path.root}/../../group-1-url-shortener/"
+    destination = "/home/${var.username}"
+  }
+
+  connection {
+    host     = azurerm_public_ip.my_public_ip.ip_address
+    type     = "ssh"
+    port     = 221
+    user     = var.username
+    password = var.password
+    agent    = "false"
+  }
+}
+
+resource "null_resource" "installer_2" {
+
+  provisioner "file" {
+    source      = "${path.root}/../../group-1-url-shortener/"
+    destination = "/home/${var.username}"
+  }
+
+  connection {
+    host     = azurerm_public_ip.my_public_ip.ip_address
+    type     = "ssh"
+    port     = 222
+    user     = var.username
+    password = var.password
+    agent    = "false"
+  }
+}
+
+resource "null_resource" "installer_3" {
+
+  provisioner "file" {
+    source      = "${path.root}/../../group-1-url-shortener/"
+    destination = "/home/${var.username}"
+  }
+
+  connection {
+    host     = azurerm_public_ip.my_public_ip.ip_address
+    type     = "ssh"
+    port     = 223
+    user     = var.username
+    password = var.password
+    agent    = "false"
+  }
+}
+
 # Enable virtual machine extension and install Nginx
 resource "azurerm_virtual_machine_extension" "my_vm_extension" {
   count                = 3
-  name                 = "Nginx"
+  name                 = "install_script"
   virtual_machine_id   = azurerm_linux_virtual_machine.my_vm[count.index].id
   publisher            = "Microsoft.Azure.Extensions"
   type                 = "CustomScript"
   type_handler_version = "2.0"
 
+  depends_on = [
+    null_resource.installer_1,
+    null_resource.installer_2,
+    null_resource.installer_3
+  ]
+
   settings = <<SETTINGS
 {
- "commandToExecute": "sudo apt-get update && sudo snap install docker"
+ "commandToExecute": "sudo apt-get update && sudo snap install docker && cd /home/${var.username} && chmod 777 docker.sh && sudo ./docker.sh build"
 }
 SETTINGS
 
