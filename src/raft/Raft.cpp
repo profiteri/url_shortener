@@ -55,6 +55,8 @@ void Raft::loadPersistentState() {
         logFile.close();
     }
 
+    prevCommitIndex = state.log.size() - 1;
+
     std::cout << "Loading persistent state done\n";
 
 }
