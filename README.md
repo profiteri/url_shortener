@@ -3,7 +3,7 @@
 The goal of this project is to implement the storage backend for a transactional URL shortener service (c.f. [bit.ly](https://bit.ly)).
 The backend should be fault tolerant and ensure that URLs produce a consistent short value.
 
-For detailed description of the system look at `report.pdf`.
+For detailed description of the system look at `README.pdf`.
 
 ## Implementation
 
