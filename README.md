@@ -3,61 +3,34 @@
 The goal of this project is to implement the storage backend for a transactional URL shortener service (c.f. [bit.ly](https://bit.ly)).
 The backend should be fault tolerant and ensure that URLs produce a consistent short value.
 
+For detailed description of the system look at `report.pdf`.
+
 ## Implementation
 
-To keep the mappings between URL and short id consistent, implement the Raft consensus protocol between storage nodes (see Lecture 5).
-Our workload is a simple key-value storage, where we transactionally insert a new mapping, if it does not exist already.
-For each insert, ship the insert logs to all replicas to ensure a consistent state.
-Replicas should, thus, also be able to answer read-only lookups from a short id to the full URL.
-Remember to keep these lookups efficient by using an index structure.
-
-## Workload
-
-For the workload, you can use the same [CSV files](https://db.in.tum.de/teaching/ws2324/clouddataprocessing/data/filelist.csv) 
-that we used in the last assignments.
-You can also use the larger [ClickBench](https://github.com/ClickHouse/ClickBench) [hits](https://datasets.clickhouse.com/hits_compatible/hits.tsv.gz) dataset.
+Azure Load Balancer distributes Http Requests from the client between the nodes in the pool. If a follower node receives the request to shorten the URL, i.e., to write, the node forwards it to the leader. Read requests, on the other hand, can be processed by all nodes. LB doesn’t send requests to the nodes that are not listening on port 80. This way, if a node crashes, it won’t receive traffic.
 
 ## Deployment
 
-Running and deploying your project should be similar to Assignment 4.
-In the containerized environment, be aware that the local container filesystem is stateless.
-When shutting down a container (or when it crashes), its local files are not preserved.
-However, we want that our shortened URLs are persistent, even if we restart all nodes.
-
-For a local Docker setup, you can use [volumes](https://docs.docker.com/storage/volumes/):
+After cloning the project, update variables in `tf/variables.tf`. Just resource_group_name and resource_group_id should be enough. Then:
 ```
-docker volume create cbdp-volume
-docker run --mount source=cbdp-volume,target=/space ...
+az login
+cd tf
+terraform init
+terraform apply
 ```
 
-In Azure Container Instances, [Azure file shares](https://learn.microsoft.com/en-us/azure/container-instances/container-instances-volume-azure-files) have similar semantics:
-```
-az storage share create --name cbdp-volume ...
-az container create --azure-file-volume-share-name cbdp-volume \
-   --azure-file-volume-mount-path /space ...
-```
+After successful deployment, terraform outputs IP address of the load balancer, where you can send HTTP requests. It supports 2 requests:
+GET: `http://10.11.12.13/cut?u=<url_to_shorten>`
+GET: `http://10.11.12.13/exp?u=<url_to_expand>`
 
-The default configuration in Azure only allocates 1GB of memory to your instances.
-If your implementation uses more memory for your workload, you can increase the allocated memory when creating an instance.
-E.g., you can create an instance with 4GB:
-```
-az container create --memory 4 ...
-```
+## Node Architecture
 
-## Report Questions
+The inter-node communication logic for write propagation as well as leader election precisely follows the Raft consensus algorithm and is implemented on the node level.
 
-* Describe the design of your system
-* How does your cluster handle leader crashes?
-   * How long does it take to elect a new leader?
-   * Measure the impact of election timeouts. Investigate what happens when it gets too short / too long.
-* Analyze the load of your nodes:
-   * How much resources do your nodes use?
-   * Where do inserts create most load?
-   * Do lookups distribute the load evenly among replicas?
-* How many nodes should you use for this system? What are their roles?
-* Measure the latency to generate a new short URL
-   * Analyze where your system spends time during this operation
-* Measure the lookup latency to get the URL from a short id
-* How does your system scale?
-   * Measure the latency with increased data inserted, e.g., in 10% increments of inserted short URLs
-   * Measure the system performance with more nodes
+Raft is conceptually the central part of the node, responsible for creating and processing RPCs. Node Networking for RPCs is implemented with TCP sockets.
+
+Persistent Storage (VM’s filesystem) is used to store committed logs as well as the current state.
+
+Hash Map for fast reads is reconstructed from logs and loaded from Persistent Storage on startup. Persistent Storage is used as a backup if the node process crashes. Raft and Http Server read the entries from the Hash Map only.
+
+Http Server runs in a separate thread, and resolves read requests on its own using Hash Map. If the node is a leader, once it receives a write request, the server thread overtakes the Raft logic and propagates the write to the followers. If the node is a follower, the server forwards the request to the leader instead.
